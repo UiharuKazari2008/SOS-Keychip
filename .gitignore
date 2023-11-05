@@ -52,3 +52,7 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+
+alls_keychip\device_key.h
+nu_keychip\device_key.h
