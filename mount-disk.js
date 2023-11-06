@@ -90,9 +90,16 @@ async function startCheckIn() {
             if (fs.existsSync(cliArgs.optionVHD)) {
                 const prepareCmd = await prepareDisk({ disk: cliArgs.optionVHD, mountPoint: 'Z:\\', writeAccess: !!(cliArgs.updateMode || cliArgs.encryptSetup) });
                 if (prepareCmd) {
-                    const unlockCmd = await unlockDisk({ diskNumber: 1, mountPoint: 'Z:\\', });
-                    if (!unlockCmd) {
-                        process.exit(103);
+                    if (cliArgs.encryptSetup) {
+                        const encryptCmd = await encryptDisk({ diskNumber: 1, mountPoint: 'Z:\\', });
+                        if (!encryptCmd) {
+                            process.exit(99);
+                        }
+                    } else {
+                        const unlockCmd = await unlockDisk({diskNumber: 1, mountPoint: 'Z:\\',});
+                        if (!unlockCmd) {
+                            process.exit(103);
+                        }
                     }
                 } else {
                     process.exit(102);
@@ -111,7 +118,7 @@ async function startCheckIn() {
                 process.exit(101);
             }
         }
-        if (cliArgs.updateMode || cliArgs.encryptSetup) {
+        if (cliArgs.encryptSetup) {
             if (cliArgs.verbose)
                 console.log(`Wait for Check-Out`);
             setTimeout(() => {
@@ -128,6 +135,18 @@ async function startCheckIn() {
             process.exit(1);
         }, 1000);
     }
+}
+async function runCheckOut() {
+    ready = true;
+    await dismountCmd({ disk: ((cliArgs.applicationVHD && fs.existsSync(cliArgs.applicationVHD)) ? cliArgs.applicationVHD : undefined), mountPoint: 'X:\\', lockDisk: true });
+    await dismountCmd({ disk: ((cliArgs.appDataVHD && fs.existsSync(cliArgs.appDataVHD)) ? cliArgs.appDataVHD : undefined), mountPoint: 'Y:\\' });
+    await dismountCmd({ disk: ((cliArgs.optionVHD && fs.existsSync(cliArgs.optionVHD)) ? cliArgs.optionVHD : undefined), mountPoint: 'Z:\\', lockDisk: true });
+    if (cliArgs.verbose)
+        console.log(`Wait for Check-Out`);
+    setTimeout(() => {
+        port.write('SG_CRYPTO//CHECK_OUT//\n');
+        process.exit(0);
+    }, 1000);
 }
 
 async function runCommand(input, suppressOutput = false) {
@@ -160,6 +179,17 @@ async function prepareDisk(o) {
     // Attach the disk to the drive letter or folder
     const mountCmd = await runCommand(`Mount-VHD -Path "${o.disk}" -NoDriveLetter -Passthru${(o.writeAccess) ? '' : ' -ReadOnly'} -Confirm:$false -ErrorAction Stop | Get-Disk | Get-Partition | where { ($_ | Get-Volume) -ne $Null } | Add-PartitionAccessPath -AccessPath ${o.mountPoint} -ErrorAction Stop | Out-Null`, true);
     return (!mountCmd.hadErrors);
+}
+async function dismountCmd(o) {
+    if (cliArgs.verbose && o.lockDisk)
+        console.log(`Lock Volume ${o.mountPoint}`);
+    if (o.lockDisk)
+        await runCommand(`Lock-BitLocker -MountPoint "${o.mountPoint}" -ForceDismount -Confirm:$false -ErrorAction SilentlyContinue`);
+    if (cliArgs.verbose)
+        console.log(`Dismount Volume ${o.mountPoint}`);
+    // Remove any existing disk mounts
+    await runCommand(`Dismount-VHD -Path "${o.disk}" -Confirm:$false -ErrorAction SilentlyContinue`, true);
+    return true;
 }
 async function unlockDisk(o) {
     if (cliArgs.verbose)
@@ -199,14 +229,17 @@ parser.on('data', (data) => {
     } else if (receivedData === 'CRYPTO_READY' && ready === false) {
         if (cliArgs.verbose) { console.log(`Ready`); }
         if (cliArgs.shutdown) {
-            port.write('SG_CRYPTO//CHECK_OUT//\n');
-            process.exit(0);
+            runCheckOut();
         } else {
             port.write('SG_CRYPTO//CHECK_IN//\n');
         }
     } else if (receivedData.startsWith("DEVICE_READY")) {
-        if (cliArgs.verbose) { console.log(`Lifesycle started`); }
-        startCheckIn();
+        if (!cliArgs.shutdown) {
+            if (cliArgs.verbose) {
+                console.log(`Lifesycle started`);
+            }
+            startCheckIn();
+        }
     } else if (receivedData.startsWith("CRYPTO_KEY_")) {
         returned_key = receivedData.substring(11).trim().split("x0")[0];
     }
