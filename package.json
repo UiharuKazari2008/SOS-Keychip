@@ -1,0 +1,18 @@
+{
+  "name": "RP-KeychipEmulator",
+  "version": "1.0.0",
+  "dependencies": {
+    "child-shell": "^5.0.0",
+    "node-powershell": "^5.0.1",
+    "serialport": "^12.0.0",
+    "yargs": "^17.7.2"
+  },
+  "bin": "mount-disk.js",
+  "scripts": {
+    "build": "nexe ."
+  },
+  "nexe": {
+    "output": "savior_of_song_keychip.exe",
+    "target": "windows-x64-14.17.0"
+  }
+}
