@@ -1,4 +1,4 @@
-# RP-KeychipEmulator
+# Savior of Song Keychip
 ALLS Keychip emulator designed to handle game disk encryption for peak realism on a non-official preboot environment
 
 ## Important Note!
