@@ -14,15 +14,16 @@ const char* applicationID = "XXXX";
 const char* applicationKey = "ENCRYPTION_KEY_STRING_GOES_HERE";
 ```
 2. Build the Ino on your hardware
-3. Encrypt the volumes
+3. Unzip release.zip in folder with your VHDs
+4. Encrypt the volumes
 ```powershell
-& savior_of_song_keychip.exe --ivString IV_STATIC_STRING_GOES_HERE --applicationID XXXX --applicationVHD app.vhd --optionVHD option.vhd --encryptSetup
+& ./savior_of_song_keychip.exe --ivString IV_STATIC_STRING_GOES_HERE --applicationID XXXX --applicationVHD app.vhd --optionVHD option.vhd --encryptSetup
 ```
-4. Run the keychip 
+5. Run the keychip 
 * Your ALLS must have Hyper-V Commandlets installed to use the Mount-VHD commands<br>
 * Keychip should be on COM5 or use `--port COM#` to change
 ```powershell
-& savior_of_song_keychip.exe --ivString IV_STATIC_STRING_GOES_HERE --applicationID XXXX --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd
+& ./savior_of_song_keychip.exe --ivString IV_STATIC_STRING_GOES_HERE --applicationID XXXX --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd
 ```
 * Game ID should matches device_key.h and ivString should be constant otherwise the encryption password will chnage
 
@@ -35,13 +36,13 @@ const char* applicationKey = "ENCRYPTION_KEY_STRING_GOES_HERE";
 ## Update Games Data
 To update option data you must add `--updateMode` to enable read-write access
 ```powershell
-& savior_of_song_keychip.exe --ivString IV_STATIC_STRING_GOES_HERE --applicationID XXXX --optionVHD option.vhd --updateMode
+& ./savior_of_song_keychip.exe --ivString IV_STATIC_STRING_GOES_HERE --applicationID XXXX --optionVHD option.vhd --updateMode
 ```
 
 ## Proper Shutdown
 If you are not restarting your hardware after the game is closed, you must check-out otherwise the keychip will lockout. Run this command after game exe has close.
 ```powershell
-& savior_of_song_keychip.exe --shutdown
+& ./savior_of_song_keychip.exe --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
 ```
 
 
