@@ -13,6 +13,6 @@
   },
   "nexe": {
     "output": "savior_of_song_keychip.exe",
-    "target": "windows-x64-14.17.0"
+    "target": "windows-x64-14.15.3"
   }
 }

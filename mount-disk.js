@@ -41,6 +41,10 @@ const cliArgs = yargs(hideBin(process.argv))
         type: 'bool',
         description: 'Enable Update Mode for Volumes'
     })
+    .option('shutdown', {
+        type: 'bool',
+        description: 'Shutdown Volumes (Check-Out)'
+    })
     .option('encryptSetup', {
         type: 'bool',
         description: 'Setup Encryption of Volumes'
@@ -187,11 +191,19 @@ async function encryptDisk(o) {
 parser.on('data', (data) => {
     let receivedData = data.toString().trim();
     if (receivedData === 'CRYPTO_LOCKOUT') {
-        if (cliArgs.verbose) { console.error(`Keychip is locked out, Press reset button or reconnect`); }
-        process.exit(10);
+        if (cliArgs.verbose) {
+            console.error(`Keychip is locked out, Press reset button or reconnect`);
+        } else {
+            console.error(`0xFE000099`);
+        }
     } else if (receivedData === 'CRYPTO_READY' && ready === false) {
         if (cliArgs.verbose) { console.log(`Ready`); }
-        port.write('SG_CRYPTO//CHECK_IN//\n');
+        if (cliArgs.shutdown) {
+            port.write('SG_CRYPTO//CHECK_OUT//\n');
+            process.exit(0);
+        } else {
+            port.write('SG_CRYPTO//CHECK_IN//\n');
+        }
     } else if (receivedData.startsWith("DEVICE_READY")) {
         if (cliArgs.verbose) { console.log(`Lifesycle started`); }
         startCheckIn();
