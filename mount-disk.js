@@ -14,7 +14,8 @@ const cliArgs = yargs(hideBin(process.argv))
     .option('verbose', {
         alias: 'v',
         type: 'bool',
-        description: 'Verbose Mode'
+        description: 'Verbose Mode',
+        hidden: true
     })
     .option('ivString', {
         type: 'string',
@@ -64,7 +65,7 @@ let ready = false;
 async function startCheckIn() {
     ready = true;
     if (cliArgs.applicationVHD || cliArgs.optionVHD || cliArgs.appDataVHD || cliArgs.surfboard) {
-        if (cliArgs.applicationVHD) {
+        if (cliArgs.applicationVHD && cliArgs.ivString) {
             if (fs.existsSync(cliArgs.applicationVHD)) {
                 const prepareCmd = await prepareDisk({ disk: cliArgs.applicationVHD, mountPoint: 'X:\\', writeAccess: !!(cliArgs.updateMode || cliArgs.encryptSetup) });
                 if (prepareCmd) {
@@ -86,7 +87,7 @@ async function startCheckIn() {
                 process.exit(101);
             }
         }
-        if (cliArgs.optionVHD) {
+        if (cliArgs.optionVHD && cliArgs.ivString) {
             if (fs.existsSync(cliArgs.optionVHD)) {
                 const prepareCmd = await prepareDisk({ disk: cliArgs.optionVHD, mountPoint: 'Z:\\', writeAccess: !!(cliArgs.updateMode || cliArgs.encryptSetup) });
                 if (prepareCmd) {
@@ -196,7 +197,8 @@ async function unlockDisk(o) {
         console.log(`Request Unlock ${o.diskNumber}`);
     returned_key = null;
     // Request the keychip to give decryption key for applicationID with a ivString and diskNumber
-    port.write(`SG_CRYPTO//DECRYPT//${cliArgs.applicationID}//${cliArgs.ivString}//${o.diskNumber}//\n`);
+    const challangeCmd = `SG_CRYPTO//DECRYPT//${cliArgs.applicationID}//${cliArgs.ivString}//${o.diskNumber}//\n`;
+    port.write(challangeCmd);
     // Wait inline for response
     while (!returned_key) { await sleep(5); }
     // Unlock bitlocker disk or folder
