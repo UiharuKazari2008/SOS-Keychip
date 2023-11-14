@@ -54,5 +54,5 @@ Mkfile.old
 dkms.conf
 
 
-alls_keychip\device_key.h
-nu_keychip\device_key.h
+Keychip-RP2040-RGB_INV\device_key.h
+Keychip-RP2040-ST7789\device_key.h

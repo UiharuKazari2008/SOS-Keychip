@@ -52,7 +52,6 @@ const cliArgs = yargs(hideBin(process.argv))
     })
     .argv
 
-
 if (cliArgs.verbose)
     console.log(`Savior of Song Keychip Bootstrap by Yukimi Kazari`);
 
@@ -60,6 +59,7 @@ const port = new SerialPort({path: cliArgs.port || "COM5", baudRate: 4800});
 const parser = port.pipe(new ReadlineParser({delimiter: '\n'}));
 
 let returned_key = null;
+let keychip_id = null;
 let ready = false;
 
 async function startCheckIn() {
@@ -72,18 +72,30 @@ async function startCheckIn() {
                     if (cliArgs.encryptSetup) {
                         const encryptCmd = await encryptDisk({ diskNumber: 0, mountPoint: 'X:\\', });
                         if (!encryptCmd) {
+                            if (!cliArgs.verbose) {
+                                process.stdout.write(".[FAIL]\n");
+                            }
                             process.exit(99);
                         }
                     } else {
                         const unlockCmd = await unlockDisk({diskNumber: 0, mountPoint: 'X:\\',});
                         if (!unlockCmd) {
+                            if (!cliArgs.verbose) {
+                                process.stdout.write(".[FAIL]\n");
+                            }
                             process.exit(103);
                         }
                     }
                 } else {
+                    if (!cliArgs.verbose) {
+                        process.stdout.write(".[FAIL]\n");
+                    }
                     process.exit(102);
                 }
             } else {
+                if (!cliArgs.verbose) {
+                    process.stdout.write(".[FAIL]\n");
+                }
                 process.exit(101);
             }
         }
@@ -94,18 +106,30 @@ async function startCheckIn() {
                     if (cliArgs.encryptSetup) {
                         const encryptCmd = await encryptDisk({ diskNumber: 1, mountPoint: 'Z:\\', });
                         if (!encryptCmd) {
+                            if (!cliArgs.verbose) {
+                                process.stdout.write(".[FAIL]\n");
+                            }
                             process.exit(99);
                         }
                     } else {
                         const unlockCmd = await unlockDisk({diskNumber: 1, mountPoint: 'Z:\\',});
                         if (!unlockCmd) {
+                            if (!cliArgs.verbose) {
+                                process.stdout.write(".[FAIL]\n");
+                            }
                             process.exit(103);
                         }
                     }
                 } else {
+                    if (!cliArgs.verbose) {
+                        process.stdout.write(".[FAIL]\n");
+                    }
                     process.exit(102);
                 }
             } else {
+                if (!cliArgs.verbose) {
+                    process.stdout.write(".[FAIL]\n");
+                }
                 process.exit(101);
             }
         }
@@ -113,26 +137,41 @@ async function startCheckIn() {
             if (fs.existsSync(cliArgs.appDataVHD)) {
                 const prepareCmd = await prepareDisk({ disk: cliArgs.appDataVHD, mountPoint: 'Y:\\', writeAccess: true });
                 if (!prepareCmd) {
+                    if (!cliArgs.verbose) {
+                        process.stdout.write(".[FAIL]\n");
+                    }
                     process.exit(102);
                 }
             } else {
+                if (!cliArgs.verbose) {
+                    process.stdout.write(".[FAIL]\n");
+                }
                 process.exit(101);
             }
         }
+        port.write('@$11$!');
         if (cliArgs.encryptSetup) {
-            if (cliArgs.verbose)
+            if (cliArgs.verbose) {
                 console.log(`Wait for Check-Out`);
+            } else {
+                process.stdout.write(".[OK]\n");
+            }
             setTimeout(() => {
-                port.write('SG_CRYPTO//CHECK_OUT//\n');
+                port.write('@$0$!');
                 process.exit(0);
             }, 1000);
         } else {
+            if (cliArgs.verbose) {
+                console.log(`Done`);
+            } else {
+                process.stdout.write(".[OK]\n");
+            }
             process.exit(0);
         }
     } else {
         // Nothing to do, Check-Out Crypto
         setTimeout(() => {
-            port.write('SG_CRYPTO//CHECK_OUT//\n');
+            port.write('@$0$!');
             process.exit(1);
         }, 1000);
     }
@@ -142,10 +181,13 @@ async function runCheckOut() {
     await dismountCmd({ disk: ((cliArgs.applicationVHD && fs.existsSync(cliArgs.applicationVHD)) ? cliArgs.applicationVHD : undefined), mountPoint: 'X:\\', lockDisk: true });
     await dismountCmd({ disk: ((cliArgs.appDataVHD && fs.existsSync(cliArgs.appDataVHD)) ? cliArgs.appDataVHD : undefined), mountPoint: 'Y:\\' });
     await dismountCmd({ disk: ((cliArgs.optionVHD && fs.existsSync(cliArgs.optionVHD)) ? cliArgs.optionVHD : undefined), mountPoint: 'Z:\\', lockDisk: true });
-    if (cliArgs.verbose)
+    if (cliArgs.verbose) {
         console.log(`Wait for Check-Out`);
+    } else {
+        process.stdout.write(".[OK]\n");
+    }
     setTimeout(() => {
-        port.write('SG_CRYPTO//CHECK_OUT//\n');
+        port.write('@$0$!');
         process.exit(0);
     }, 1000);
 }
@@ -173,8 +215,11 @@ async function runCommand(input, suppressOutput = false) {
 }
 
 async function prepareDisk(o) {
-    if (cliArgs.verbose)
+    if (cliArgs.verbose) {
         console.log(`Prepare Volume ${o.mountPoint}`);
+    } else {
+        process.stdout.write(".");
+    }
     // Remove any existing disk mounts
     await runCommand(`Dismount-VHD -Path "${o.disk}" -Confirm:$false -ErrorAction SilentlyContinue`, true);
     // Attach the disk to the drive letter or folder
@@ -182,22 +227,31 @@ async function prepareDisk(o) {
     return (!mountCmd.hadErrors);
 }
 async function dismountCmd(o) {
-    if (cliArgs.verbose && o.lockDisk)
+    if (cliArgs.verbose && o.lockDisk) {
         console.log(`Lock Volume ${o.mountPoint}`);
+    } else {
+        process.stdout.write(".");
+    }
     if (o.lockDisk)
         await runCommand(`Lock-BitLocker -MountPoint "${o.mountPoint}" -ForceDismount -Confirm:$false -ErrorAction SilentlyContinue`);
-    if (cliArgs.verbose)
+    if (cliArgs.verbose) {
         console.log(`Dismount Volume ${o.mountPoint}`);
+    } else {
+        process.stdout.write(".");
+    }
     // Remove any existing disk mounts
     await runCommand(`Dismount-VHD -Path "${o.disk}" -Confirm:$false -ErrorAction SilentlyContinue`, true);
     return true;
 }
 async function unlockDisk(o) {
-    if (cliArgs.verbose)
+    if (cliArgs.verbose) {
         console.log(`Request Unlock ${o.diskNumber}`);
+    } else {
+        process.stdout.write(".");
+    }
     returned_key = null;
     // Request the keychip to give decryption key for applicationID with a ivString and diskNumber
-    const challangeCmd = `SG_CRYPTO//DECRYPT//${cliArgs.applicationID}//${cliArgs.ivString}//${o.diskNumber}//\n`;
+    const challangeCmd = `@$10$${cliArgs.applicationID}$${cliArgs.ivString}$${o.diskNumber}$!`;
     port.write(challangeCmd);
     // Wait inline for response
     while (!returned_key) { await sleep(5); }
@@ -207,11 +261,14 @@ async function unlockDisk(o) {
     return (!unlockCmd.hadErrors);
 }
 async function encryptDisk(o) {
-    if (cliArgs.verbose)
+    if (cliArgs.verbose) {
         console.log(`Request Encrypt ${o.diskNumber}`);
+    } else {
+        process.stdout.write(".");
+    }
     returned_key = null;
     // Request the keychip to give decryption key for applicationID with a ivString and diskNumber
-    port.write(`SG_CRYPTO//DECRYPT//${cliArgs.applicationID}//${cliArgs.ivString}//${o.diskNumber}//\n`);
+    port.write(`@$10$${cliArgs.applicationID}$${cliArgs.ivString}$${o.diskNumber}$!`);
     // Wait inline for response
     while (!returned_key) { await sleep(5); }
     // Unlock bitlocker disk or folder
@@ -222,44 +279,64 @@ async function encryptDisk(o) {
 
 parser.on('data', (data) => {
     let receivedData = data.toString().trim();
-    if (receivedData === 'CRYPTO_LOCKOUT') {
+    if (receivedData.startsWith('KEYCHIP_FAILURE_')) {
         if (cliArgs.verbose) {
             console.error(`Keychip is locked out, Press reset button or reconnect`);
         } else {
-            console.error(`0xFE000099`);
+            console.error(`Hardware Failure ${receivedData.replace("KEYCHIP_FAILURE_", "")}`);
         }
-    } else if (receivedData === 'CRYPTO_READY' && ready === false) {
-        if (cliArgs.verbose) { console.log(`Ready`); }
+    } else if (receivedData === 'SG_HELLO' && ready === false) {
+        if (cliArgs.verbose) {
+            console.log(`Ready`);
+        } else {
+            process.stdout.write(".");
+        }
         if (cliArgs.shutdown) {
             runCheckOut();
         } else {
-            port.write('SG_CRYPTO//CHECK_IN//\n');
+            port.write('@$1$!');
         }
-    } else if (receivedData.startsWith("DEVICE_READY")) {
+    } else if (receivedData.startsWith("SG_UNLOCK")) {
         if (!cliArgs.shutdown) {
             if (cliArgs.verbose) {
                 console.log(`Lifesycle started`);
+            } else {
+                process.stdout.write(".");
             }
             startCheckIn();
         }
     } else if (receivedData.startsWith("CRYPTO_KEY_")) {
         returned_key = receivedData.substring(11).trim().split("x0")[0];
+    } else if (receivedData.startsWith("KEYCHIP_ID_")) {
+        keychip_id = receivedData.substring(11).trim();
     }
 });
 port.on('error', (err) => {
-    if (cliArgs.verbose) { console.error(`Keychip Communication Error`, err); }
+    if (cliArgs.verbose) {
+        console.error(`Keychip Communication Error`, err);
+    } else {
+        process.stdout.write(".[FAIL]\n");
+    }
     process.exit(10);
 });
 port.on('close', (err) => {
-    if (cliArgs.verbose) { console.error(`Keychip Communication Closed`, err); }
+    if (cliArgs.verbose) {
+        console.error(`Keychip Communication Closed`, err);
+    } else {
+        process.stdout.write(".[FAIL]\n");
+    }
     process.exit(10);
 });
 
 // Handle the opening of the serial port
 port.on('open', () => {
-    if (cliArgs.verbose) { console.log(`Keychip Connected`); }
-    port.write('SG_CRYPTO//PRESENCE//\n');
+    if (cliArgs.verbose) {
+        console.log(`Keychip Connected`);
+    } else {
+        process.stdout.write(".");
+    }
+    port.write('@$?$!');
 });
 let pingTimer = setInterval(() => {
-    port.write('SG_CRYPTO//PRESENCE//\n');
+    port.write('@$?$!');
 }, 2000)

@@ -24,9 +24,10 @@ let dropOutTimer = null;
 
 parser.on('data', (data) => {
     let receivedData = data.toString().trim();
-    if (receivedData === 'CRYPTO_LOCKOUT') {
+    if (receivedData.startsWith('KEYCHIP_FAILURE_')) {
+        console.error(`Keychip Failure ${receivedData.replace("KEYCHIP_FAILURE_", "")}`);
         process.exit(10);
-    } else if (receivedData === 'CRYPTO_READY') {
+    } else if (receivedData === 'SG_HELLO') {
         if (cliArgs.verbose) { console.log(`Present`); }
         lastCheckIn = new Date().valueOf();
         clearTimeout(dropOutTimer);
@@ -49,5 +50,5 @@ port.on('open', () => {
     if (cliArgs.verbose) { console.log(`Keychip Connected`); }
 });
 let pingTimer = setInterval(() => {
-    port.write('SG_CRYPTO//PRESENCE//\n');
+    port.write('@$?$!');
 }, 1500)
