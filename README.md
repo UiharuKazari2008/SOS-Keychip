@@ -1,3 +1,5 @@
+<img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/Iona.jpg"/>
+
 # Savior of Song Keychip
 ALLS Keychip emulator designed to handle game disk encryption for peak realism on a non-official preboot environment
 
@@ -9,6 +11,7 @@ YOU MUST DECRYPT GAME DATA BEFORE UPDATING AND RE-ENCRYPT AFTER UPDATING, The pa
 
 ## Hardware
 Waveshare RP2040-GEEK
+<img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/IMG_5948.jpg"/>
 
 ## Implimentation
 1. Create a device_key.h file in the ./alls_keychip folder
