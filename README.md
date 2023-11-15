@@ -53,7 +53,18 @@ If you are not restarting your hardware after the game is closed, you must check
 & ./savior_of_song_keychip.exe --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
 ```
 
-## Creating your own sepreboot
+## Error Codes
+The keychip is designed to handle requests in a very specific order and if any command is ran that is not at the correct stage the device will lock and require a power cycle.
+* 0001 - Application does not match keychip's known store (Unlock Disk)
+* 0090 - Invalid Check String (Unlock Disk)
+* 0091 - Illegal unlock of disk that has previouly been unlocked
+* 9000 - Unknown Error when unlocking disk
+* 0013 - Generic Unlock Error
+* 0010 - Tried to take ownership when the device is already in use
+* 0011 - Tried to release ownership when the device was never in use
+* 0013 - Requested Keychip ID before unlock of any disks
+
+## Creating your own sgpreboot
 **C:\ should be encrypted with TPM at all times and enable write filter for C:\ if required**<br/>
 
 ### System Folder
