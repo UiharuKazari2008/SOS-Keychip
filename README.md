@@ -14,6 +14,9 @@ Waveshare RP2040-GEEK
 <img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/IMG_5948.jpg"/>
 
 ## Implimentation
+0. Download the latest executables (and VHD Images if this id your first time)
+* https://github.com/UiharuKazari2008/SOS-Keychip/releases/tag/release
+* https://github.com/UiharuKazari2008/SOS-Keychip/releases/tag/VHD-Templates
 1. Create a device_key.h file in the ./alls_keychip folder
 ```cplusplus
 const char* keychipText = "XXXX XX XX";
