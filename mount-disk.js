@@ -150,24 +150,12 @@ async function startCheckIn() {
             }
         }
         port.write('@$11$!');
-        if (cliArgs.encryptSetup) {
-            if (cliArgs.verbose) {
-                console.log(`Wait for Check-Out`);
-            } else {
-                process.stdout.write(".[OK]\n");
-            }
-            setTimeout(() => {
-                port.write('@$0$!');
-                process.exit(0);
-            }, 1000);
+        if (cliArgs.verbose) {
+            console.log(`Done`);
         } else {
-            if (cliArgs.verbose) {
-                console.log(`Done`);
-            } else {
-                process.stdout.write(".[OK]\n");
-            }
-            process.exit(0);
+            process.stdout.write(".[OK]\n");
         }
+        process.exit(0);
     } else {
         // Nothing to do, Check-Out Crypto
         setTimeout(() => {
