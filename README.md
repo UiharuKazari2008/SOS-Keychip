@@ -25,7 +25,11 @@ const char* applicationID = "XXXX";
 const char* applicationKey = "GAME_KEY";
 const char* applicationIV = "EXPECTED_CLIENT_IV";
 ```
-2. Launch Arduino IDE and flash your RP2040 that will be the keychip
+2. Launch Arduino IDE and flash `Keychip-RP2040-ST7789` to your keychip
+* You will need install the follwing libraries
+  * ArduinoBearSSL
+  * Adafruit_ST7789
+* "Keychip-RP2040-RGB_INV" is currecty out of date and can't be uses, it will be updated soon
 3. Unzip release.zip in folder with the blank VHD set
 4. Mount and Encrypt the volumes
 ```powershell
