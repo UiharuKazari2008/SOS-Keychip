@@ -320,3 +320,9 @@ d-----        08/11/2023     15:43                appdata
 * You can move segatools.ini overtop the one in X:\bin if you want to prevent modification
 #### option.vhd
 Contains all option folders and is empty by default
+
+## Build EXE
+```powershell
+nexe --input mount-disk.js --target windows-x64-14.15.3 --output .\build\savior_of_song_keychip.exe --ico .\icon.ico
+nexe --input watchdog.js --target windows-x64-14.15.3 --output .\build\savior_of_song_watchdog.exe --ico .\icon.ico
+```
