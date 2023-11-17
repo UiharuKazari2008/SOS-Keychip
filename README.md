@@ -10,14 +10,15 @@ This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is
 YOU MUST DECRYPT GAME DATA BEFORE UPDATING AND RE-ENCRYPT AFTER UPDATING, The password hash algorithm has changed and will not match previous disk passwords.
 
 ## Hardware
-Waveshare RP2040-GEEK
-<img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/IMG_5948.jpg"/>
+Waveshare RP2040-GEEK<br>
+<img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/IMG_5948.jpg"/><br>
+or any generic RP2040/Arduino
 
-## Implimentation
-0. Download the latest executables (and VHD Images if this id your first time)
-* https://github.com/UiharuKazari2008/SOS-Keychip/releases/tag/release
-* https://github.com/UiharuKazari2008/SOS-Keychip/releases/tag/VHD-Templates
-1. Create a device_key.h file in the ./alls_keychip folder
+## Setup
+0. Download the latest executables (and VHD Images if this is your first time)
+  * https://github.com/UiharuKazari2008/SOS-Keychip/releases/tag/release
+  * https://github.com/UiharuKazari2008/SOS-Keychip/releases/tag/VHD-Templates
+1. Create a device_key.h file in the ./Keychip-<version> folder
 ```cplusplus
 const char* keychipText = "XXXX XX XX";
 const char* keychipID = "XXXX-XXXXXXXXXXX";
@@ -25,37 +26,50 @@ const char* applicationID = "XXXX";
 const char* applicationKey = "GAME_KEY";
 const char* applicationIV = "EXPECTED_CLIENT_IV";
 ```
-2. Launch Arduino IDE and flash `Keychip-RP2040-ST7789` to your keychip
-* You will need install the follwing libraries
-  * ArduinoBearSSL
-  * Adafruit_ST7789
-* "Keychip-RP2040-RGB_INV" is currecty out of date and can't be uses, it will be updated soon
-3. Unzip release.zip in folder with the blank VHD set
-4. Mount and Encrypt the volumes
+2. Launch Arduino IDE and flash the firmware
+  * Install the following libraries with the library manager
+    * ArduinoBearSSL
+    * Adafruit_ST7789 (ONLY If your using the ST7789 version)
+  * Version Explanation
+    * ST7789 - Waveshare RP2040-GEEK
+      * "Premium" Keychip with Display
+    * RGB_INV - Pimoroni Tiny2040 or Generic RP2040
+      * Standard Generic Version with (or without) a LED (Inverted Output)
+    * ARDUINO - Generic Arduino Version
+      * This generic and cheap bearbone version
+3. Unzip release.zip in folder with the blank VHD to your new game folder
+4. Mount and Encrypt the volumes<br>
+**RUN AS ADMINISTRATOR**
 ```powershell
 & ./savior_of_song_keychip.exe --ivString IV_STATIC_STRING_GOES_HERE --applicationID XXXX --applicationVHD app.vhd --optionVHD option.vhd --encryptSetup
 ```
-5. Run the Keychip bootstrap 
-* Your ALLS must have Hyper-V Commandlets installed to use the Mount-VHD commands<br>
-* Keychip should be on `COM5` or use `--port COM#` to change
+5. Run the Keychip bootstrap<br>
+**RUN AS ADMINISTRATOR**
+  * Keychip should be on `COM5` or use `--port COM#` to change
 ```powershell
 & ./savior_of_song_keychip.exe --ivString IV_STATIC_STRING_GOES_HERE --applicationID XXXX --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd
 ```
-* Game ID and IV String MUST MATCH device_key.h at all times!
-* Disks will be mounted to the following locations:
-  * app -> X:\
-  * appdata -> Y:\
-  * option -> Z:\
-  * **Please keep any existing volumes not mounted there!**
+  * Game ID and IV String MUST MATCH device_key.h at all times!
+  * Disks will be mounted to the following locations:
+    * app -> X:\
+    * appdata -> Y:\
+    * option -> Z:\
+    * **Please keep any existing volumes not mounted there!**
+6. When Encryption is completed, and you have loaded your game data then checkout the keychip<br>
+**RUN AS ADMINISTRATOR**
+```powershell
+& ./savior_of_song_keychip.exe --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
+```
 
 ## Update Games Data
 To update option data you must add `--updateMode` to enable read-write access
 ```powershell
 & ./savior_of_song_keychip.exe --ivString IV_STATIC_STRING_GOES_HERE --applicationID XXXX --optionVHD option.vhd --updateMode
 ```
+  * Remember to --shutdown or the hardware will lockout
 
 ## Proper Shutdown
-If you are not restarting your hardware after the game is closed, you must check-out otherwise the keychip will lockout. Run this command after game exe has close.
+If you are not restarting/powering off your hardware after the game, you must check-out otherwise the keychip will lockout. Run this command after game exe has close.
 ```powershell
 & ./savior_of_song_keychip.exe --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
 ```
@@ -71,7 +85,15 @@ The keychip is designed to handle requests in a very specific order and if any c
 * 0011 - Tried to release ownership when the device was never in use
 * 0013 - Requested Keychip ID before unlock of any disks
 
-## Creating your own sgpreboot
+## Basic "just run the application" BAT file
+**RUN AS ADMINISTRATOR**
+```powershell
+savior_of_song_keychip.exe --ivString IV_STATIC_STRING_GOES_HERE --applicationID XXXX --applicationVHD app.vhd --optionVHD option.vhd
+X:\app\start.bat
+savior_of_song_keychip.exe --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
+```
+
+## Creating your own sgpreboot (Fancy "this is a ALLS" setup)
 **C:\ should be encrypted with TPM at all times and enable write filter for C:\ if required**<br/>
 
 ### System Folder
