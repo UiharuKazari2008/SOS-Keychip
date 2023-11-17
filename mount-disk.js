@@ -5,6 +5,7 @@ const { SerialPort, ReadlineParser } = require('serialport');
 const yargs = require('yargs/yargs')
 const { hideBin } = require('yargs/helpers');
 const {PowerShell} = require("node-powershell");
+const {resolve} = require("path");
 const sleep = (waitTimeInMs) => new Promise(resolve => setTimeout(resolve, waitTimeInMs));
 const cliArgs = yargs(hideBin(process.argv))
     .option('port', {
@@ -52,18 +53,46 @@ const cliArgs = yargs(hideBin(process.argv))
     })
     .argv
 
+const application_version = 1.5;
+const expected_crypto_version = 2;
+const min_firmware_version = 1.1;
+
 if (cliArgs.verbose)
-    console.log(`Savior of Song Keychip Bootstrap by Yukimi Kazari`);
+    console.log(`Savior of Song Keychip Bootstrap v${application_version} by Yukimi Kazari`);
 
 const port = new SerialPort({path: cliArgs.port || "COM5", baudRate: 4800});
 const parser = port.pipe(new ReadlineParser({delimiter: '\n'}));
 
 let returned_key = null;
 let keychip_id = null;
+let keychip_version = [0,0];
 let ready = false;
 
 async function startCheckIn() {
     ready = true;
+    if (keychip_version[0] < min_firmware_version) {
+        if (cliArgs.verbose) {
+            console.error(`Firmware "${keychip_version[0]}" is outdated, please flash the latest version!`);
+        } else {
+            process.stdout.write(".[FAIL]\n");
+        }
+        port.write('@$0$!');
+        process.exit(102);
+    }
+    if (keychip_version[1] !== expected_crypto_version) {
+        if (cliArgs.verbose) {
+            console.error(`Disk Decryption Scheme (${keychip_version[1]} != ${expected_crypto_version}) Mismatch!`);
+            console.error(`## IMPORTANT NOTICE ###############################################################`);
+            console.error(`You must use the bootstrap version that matches your hardware crypto scheme`);
+            console.error(`and mount disks as update mode, then disable encryption from BitLocker.`);
+            console.error(`Once decrypted, you can update the bootstrap and firmware and run --encryptSetup`);
+            console.error(`###################################################################################`);
+        } else {
+            process.stdout.write(".[FAIL]\n");
+        }
+        port.write('@$0$!');
+        process.exit(102);
+    }
     if (cliArgs.applicationVHD || cliArgs.optionVHD || cliArgs.appDataVHD || cliArgs.surfboard) {
         if (cliArgs.applicationVHD && cliArgs.ivString) {
             if (fs.existsSync(cliArgs.applicationVHD)) {
@@ -166,9 +195,26 @@ async function startCheckIn() {
 }
 async function runCheckOut() {
     ready = true;
-    await dismountCmd({ disk: ((cliArgs.applicationVHD && fs.existsSync(cliArgs.applicationVHD)) ? cliArgs.applicationVHD : undefined), mountPoint: 'X:\\', lockDisk: true });
-    await dismountCmd({ disk: ((cliArgs.appDataVHD && fs.existsSync(cliArgs.appDataVHD)) ? cliArgs.appDataVHD : undefined), mountPoint: 'Y:\\' });
-    await dismountCmd({ disk: ((cliArgs.optionVHD && fs.existsSync(cliArgs.optionVHD)) ? cliArgs.optionVHD : undefined), mountPoint: 'Z:\\', lockDisk: true });
+    if (cliArgs.applicationVHD) {
+        await dismountCmd({
+            disk: ((cliArgs.applicationVHD && fs.existsSync(cliArgs.applicationVHD)) ? cliArgs.applicationVHD : undefined),
+            mountPoint: 'X:\\',
+            lockDisk: true
+        });
+    }
+    if (cliArgs.appDataVHD) {
+        await dismountCmd({
+            disk: ((cliArgs.appDataVHD && fs.existsSync(cliArgs.appDataVHD)) ? cliArgs.appDataVHD : undefined),
+            mountPoint: 'Y:\\'
+        });
+    }
+    if (cliArgs.optionVHD) {
+        await dismountCmd({
+            disk: ((cliArgs.optionVHD && fs.existsSync(cliArgs.optionVHD)) ? cliArgs.optionVHD : undefined),
+            mountPoint: 'Z:\\',
+            lockDisk: true
+        });
+    }
     if (cliArgs.verbose) {
         console.log(`Wait for Check-Out`);
     } else {
@@ -209,15 +255,15 @@ async function prepareDisk(o) {
         process.stdout.write(".");
     }
     // Remove any existing disk mounts
-    await runCommand(`Dismount-VHD -Path "${o.disk}" -Confirm:$false -ErrorAction SilentlyContinue`, true);
+    await runCommand(`Dismount-DiskImage -ImagePath "${resolve(o.disk)}" -Confirm:$false -ErrorAction SilentlyContinue`, true);
     // Attach the disk to the drive letter or folder
-    const mountCmd = await runCommand(`Mount-VHD -Path "${o.disk}" -NoDriveLetter -Passthru${(o.writeAccess) ? '' : ' -ReadOnly'} -Confirm:$false -ErrorAction Stop | Get-Disk | Get-Partition | where { ($_ | Get-Volume) -ne $Null } | Add-PartitionAccessPath -AccessPath ${o.mountPoint} -ErrorAction Stop | Out-Null`, true);
+    const mountCmd = await runCommand(`Mount-DiskImage -ImagePath "${resolve(o.disk)}" -StorageType VHD -NoDriveLetter -Passthru -Access ${(o.writeAccess) ? 'ReadWrite' : 'ReadOnly'} -Confirm:$false -ErrorAction Stop | Get-Disk | Get-Partition | where { ($_ | Get-Volume) -ne $Null } | Add-PartitionAccessPath -AccessPath ${o.mountPoint} -ErrorAction Stop | Out-Null`, true);
     return (!mountCmd.hadErrors);
 }
 async function dismountCmd(o) {
     if (cliArgs.verbose && o.lockDisk) {
         console.log(`Lock Volume ${o.mountPoint}`);
-    } else {
+    } else if (o.lockDisk) {
         process.stdout.write(".");
     }
     if (o.lockDisk)
@@ -228,7 +274,7 @@ async function dismountCmd(o) {
         process.stdout.write(".");
     }
     // Remove any existing disk mounts
-    await runCommand(`Dismount-VHD -Path "${o.disk}" -Confirm:$false -ErrorAction SilentlyContinue`, true);
+    await runCommand(`Dismount-DiskImage -ImagePath "${resolve(o.disk)}" -Confirm:$false -ErrorAction SilentlyContinue`, true);
     return true;
 }
 async function unlockDisk(o) {
@@ -244,6 +290,11 @@ async function unlockDisk(o) {
     // Wait inline for response
     while (!returned_key) { await sleep(5); }
     // Unlock bitlocker disk or folder
+    if (cliArgs.verbose) {
+        console.log(`Key Unlock ${o.diskNumber}`);
+    } else {
+        process.stdout.write(".");
+    }
     const unlockCmd = await runCommand(`Unlock-BitLocker -MountPoint "${o.mountPoint}" -Password $(ConvertTo-SecureString -String "${returned_key}" -AsPlainText -Force) -Confirm:$false -ErrorAction Stop`);
     returned_key = null;
     return (!unlockCmd.hadErrors);
@@ -260,6 +311,11 @@ async function encryptDisk(o) {
     // Wait inline for response
     while (!returned_key) { await sleep(5); }
     // Unlock bitlocker disk or folder
+    if (cliArgs.verbose) {
+        console.log(`Key Encrypt ${o.diskNumber}`);
+    } else {
+        process.stdout.write(".");
+    }
     const unlockCmd = await runCommand(`Enable-BitLocker -MountPoint "${o.mountPoint}" -EncryptionMethod XtsAes256 -UsedSpaceOnly -SkipHardwareTest -PasswordProtector -Password $(ConvertTo-SecureString -String "${returned_key}" -AsPlainText -Force) -Confirm:$false -ErrorAction Stop`);
     returned_key = null;
     return (!unlockCmd.hadErrors);
@@ -297,6 +353,8 @@ parser.on('data', (data) => {
         returned_key = receivedData.substring(11).trim().split("x0")[0];
     } else if (receivedData.startsWith("KEYCHIP_ID_")) {
         keychip_id = receivedData.substring(11).trim();
+    } else if (receivedData.startsWith("FIRMWARE_VER_")) {
+        keychip_version = receivedData.split(' ').map(e => parseFloat(e.split('_VER_')[1]));
     }
 });
 port.on('error', (err) => {
@@ -317,12 +375,14 @@ port.on('close', (err) => {
 });
 
 // Handle the opening of the serial port
-port.on('open', () => {
+port.on('open', async () => {
     if (cliArgs.verbose) {
         console.log(`Keychip Connected`);
     } else {
         process.stdout.write(".");
     }
+    port.write('@$5$!');
+    await sleep(600);
     port.write('@$?$!');
 });
 let pingTimer = setInterval(() => {

@@ -6,12 +6,12 @@
 #include <SPI.h>
 #include "SHA256.h"
 #include "device_key.h"
-// device_key file should look like this
-// const char* keychipText = "SDFE XX XX";
-// const char* keychipID = "XXXX-XXXXXXXXXXX";
+// device_key.h file should look like this
+// const char* keychipText = "SDFE XX XX"; // Should be GAME_ID VER REGION
+// const char* keychipID = "XXXX-XXXXXXXXXXX"; // Keychip ID that will be sent to segatools
 // const char* applicationID = "SDFE";
-// const char* applicationKey = "SOME_CRYPTO_KEY";
-// const char* applicationIV = "EXPECTED_CHECK_CODE"
+// const char* applicationKey = "SOME_CRYPTO_KEY"; // Refer to "the list of keys" or make your own does not matter
+// const char* applicationIV = "EXPECTED_CHECK_CODE" // Same as above, used as check string and not actually used as IV at this time
 #include "images.h"
 
 #define LCD_CS 9
@@ -29,6 +29,10 @@
 
 #define BG_COLOR ST77XX_WHITE
 #define FG_WHITE ST77XX_BLACK
+
+const String SW_VERSION = "1.1";
+const String CRYPTO_VERSION = "2";
+// I love you Iona
 
 Adafruit_ST7789 tft = Adafruit_ST7789(LCD_CS, LCD_DC, LCD_MOSI, LCD_SCK, LCD_RST);
 
@@ -76,6 +80,7 @@ void loop() {
               analogWrite(LCD_BL, (deviceReady) ? 64 : 2);
             } if (command == "1") {
               if (deviceReady == false && exchangeStage == 0) {
+                drawActiveInfo("READY", keychipText);
                 Serial.println("SG_UNLOCK");
                 deviceReady = true;
                 exchangeStage = 1;
@@ -96,6 +101,7 @@ void loop() {
                 }
                 deviceReady = false;
                 exchangeStage = 0;
+                drawKeychipInfo();
                 Serial.println("SG_LOCK");
                 ledColor(ST77XX_RED);
                 analogWrite(LCD_BL, 255);
@@ -106,8 +112,14 @@ void loop() {
                 errorNumber = "0011";
                 lockDevice();
               }
+            } else if (command == "5") {
+              Serial.print("FIRMWARE_VER_");
+              Serial.print(SW_VERSION);
+              Serial.print(" CRYPTO_VER_");
+              Serial.println(CRYPTO_VERSION);
             } else if (command == "11") {
               if (deviceReady == true && exchangeStage == 2) {
+                drawActiveInfo("ACTIVE", keychipText);
                 Serial.print("KEYCHIP_ID_");
                 Serial.println(keychipID);
                 deviceReady = true;
@@ -142,6 +154,9 @@ void loop() {
                   SHA256.beginHmac(applicationKey);
                   SHA256.print(inputString);
                   SHA256.endHmac();
+                  String line1 = "UNLOCK DISK ";
+                  line1 += appDrive;
+                  drawActiveInfo(line1, keychipText);
 
                   Serial.print("CRYPTO_KEY_");
                   while (SHA256.available()) {
@@ -258,11 +273,19 @@ void drawMainScreen() {
   drawBitmap(0, 0, tft.width(), tft.height(), home_ios_image);
   int16_t x, y, rectX, rectY, rectHeight, rectWidth;
   uint16_t w, h;
-  tft.getTextBounds("Savior of Song Keychip", 0, 0, &x, &y, &w, &h);
-  x = (tft.width() - w) / 2;
-  y = (tft.height() - h) / 2 - 40;
-  drawOutlinedText("Savior of Song Keychip", x, y, FG_WHITE, BG_COLOR);
-  drawKeychipInfo();
+  //tft.getTextBounds("Savior of Song Keychip", 0, 0, &x, &y, &w, &h);
+  //x = (tft.width() - w) / 2;
+  //y = (tft.height() - h) / 2 - 40;
+  //drawOutlinedText("Savior of Song Keychip", x, y, FG_WHITE, BG_COLOR);
+  String version = "FW:";
+  version += SW_VERSION;
+  version += " - CG:";
+  version += CRYPTO_VERSION;
+  tft.getTextBounds(version, 0, 0, &x, &y, &w, &h);
+  x = (tft.width() - w) - 5;
+  y = (tft.height() - h) / 2 + 30;
+  drawOutlinedText(version.c_str(), x, y, FG_WHITE, BG_COLOR);
+  drawActiveInfo("Savior of Song", "RESET_OK");
 }
 void drawKeychipInfo() {
   tft.setFont(&FreeSans9pt7b);
@@ -286,12 +309,11 @@ void drawKeychipInfo() {
   tft.setTextColor(BG_COLOR);
   tft.print(keychipText);
 }
-void drawActiveKeychipInfo() {
+void drawActiveInfo(String line1, String line2) {
   tft.setFont(&FreeSans9pt7b);
   int16_t x, y, rectX, rectY, rectHeight, rectWidth;
   uint16_t w, h;
-  const String censoredID = String(keychipID).substring(0, 13);
-  tft.getTextBounds(censoredID, 0, 0, &x, &y, &w, &h);
+  tft.getTextBounds(line1, 0, 0, &x, &y, &w, &h);
   x = 4;
   y = (tft.height() - h) / 2 + 51;
   rectHeight = ((h + 6) * 2) + 1;
@@ -302,9 +324,9 @@ void drawActiveKeychipInfo() {
   tft.drawRect(rectX, rectY, rectWidth, rectHeight, ST77XX_BLACK);
   tft.setCursor(x, y);
   tft.setTextColor(BG_COLOR);
-  tft.print(censoredID);
+  tft.print(line1);
   y = y + h + 4;
   tft.setCursor(x, y);
   tft.setTextColor(BG_COLOR);
-  tft.print(keychipText);
+  tft.print(line2);
 }

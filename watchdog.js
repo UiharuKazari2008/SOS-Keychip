@@ -15,7 +15,7 @@ const cliArgs = yargs(hideBin(process.argv))
 
 
 if (cliArgs.verbose)
-    console.log(`Savior of Song Keychip Bootstrap by Yukimi Kazari`);
+    console.log(`Savior of Song Keychip Watchdog by Yukimi Kazari`);
 
 const port = new SerialPort({path: cliArgs.port || "COM5", baudRate: 4800});
 const parser = port.pipe(new ReadlineParser({delimiter: '\n'}));
