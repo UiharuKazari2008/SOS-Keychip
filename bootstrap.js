@@ -130,7 +130,7 @@ if (cliArgs.versionFile) {
     };
 }
 
-const application_version = 1.5;
+const application_version = 1.6;
 const expected_crypto_version = 2;
 const min_firmware_version = 1.1;
 
