@@ -282,9 +282,20 @@ async function runCommand(input, suppressOutput = false) {
     });
 }
 async function runAppScript(input) {
-    applicationArmed = spawn('powershell.exe', ['-File', input, '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
-        stdio: 'inherit' // Inherit the standard IO of the Node.js process
-    });
+    return new Promise((resolve) => {
+        applicationArmed = spawn('powershell.exe', ['-File', input, '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+            stdio: 'inherit' // Inherit the standard IO of the Node.js process
+        });
+        applicationArmed.on('exit', function() {
+            resolve()
+        })
+        applicationArmed.on('close', function() {
+            resolve()
+        })
+        applicationArmed.on('end', function() {
+            resolve()
+        })
+    })
 }
 
 async function prepareDisk(o) {
@@ -384,7 +395,7 @@ parser.on('data', (data) => {
                 console.error(`Keychip Checkin Failed`);
             }
             if (applicationArmed !== false) {
-                applicationArmed.kill();
+                applicationArmed.kill("SIGINT");
             } else {
                 process.exit(1);
             }
@@ -423,7 +434,7 @@ port.on('error', (err) => {
     } else if (cliArgs.watchdog) {
         console.error(`Keychip Communication Error`);
     } else if (applicationArmed) {
-        applicationArmed.kill();
+        applicationArmed.kill("SIGINT");
     } else {
         process.stdout.write(".[FAIL]\n");
     }
@@ -436,7 +447,7 @@ port.on('close', (err) => {
     } else if (cliArgs.watchdog) {
         console.error(`Keychip Removal`);
     } else if (applicationArmed) {
-        applicationArmed.kill();
+        applicationArmed.kill("SIGINT");
     } else {
         process.stdout.write(".[FAIL]\n");
     }
@@ -461,7 +472,6 @@ port.on('open', async () => {
             await spawn('powershell.exe', ['-File', resolve(cliArgs.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
                 stdio: 'inherit' // Inherit the standard IO of the Node.js process
             });
-            await runCheckOut();
         }
         if (cliArgs.verbose) {
             console.log(`Keychip Connected`);
