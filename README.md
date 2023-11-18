@@ -9,7 +9,7 @@ This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is
 ## Hardware
 Waveshare RP2040-GEEK<br>
 <img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/IMG_5948.jpg"/><br>
-or any generic RP2040/Arduino
+or any generic RP2040/[Arduino USB Dongle](https://a.co/d/fG1uoK3)
 
 ## Setup
 0. Download the latest executables (and VHD Images if this is your first time)
