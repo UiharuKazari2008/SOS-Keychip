@@ -13,7 +13,7 @@ or any generic RP2040/Arduino
 
 ## Setup
 0. Download the latest executables (and VHD Images if this is your first time)
-  * https://github.com/UiharuKazari2008/SOS-Keychip/releases/tag/release
+  * https://github.com/UiharuKazari2008/SOS-Keychip/releases/download/release/savior_of_song_keychip.exe
   * https://github.com/UiharuKazari2008/SOS-Keychip/releases/tag/VHD-Templates
 1. Create a device_key.h file in the ./Keychip-<version> folder
 ```cplusplus
@@ -96,9 +96,7 @@ savior_of_song_keychip.exe --applicationVHD app.vhd --appDataVHD appdata.vhd --o
 ### System Folder
 The system folder should be located in `C:\SEGA\system` and contain the following files:<br>
 ```
-node_modules
 savior_of_song_keychip.exe
-savior_of_song_warchdog.exe
 secure.ps1
 ```
 #### secure.ps1
