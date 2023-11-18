@@ -284,7 +284,7 @@ This will be a Read-Only filesystem when active
 This is the script to launch the game. 
 This is considered "secure" and is located in the game to prevent modification 
 ```powershell
-. S:\SDHD\enviorment.ps1
+. S:\XXXX\enviorment.ps1
 $Mouse=@' 
 [DllImport("user32.dll",CharSet=CharSet.Auto, CallingConvention=CallingConvention.StdCall)]
 public static extern void mouse_event(long dwFlags, long dx, long dy, long cButtons, long dwExtraInfo);
