@@ -1,4 +1,4 @@
-<img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/Iona.jpg"/>
+<img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/Iona.png"/>
 
 # Savior of Song "Iona" Hardware Keychip for Windows
 ALLS Keychip emulator designed to handle game disk encryption for peak realism on a non-official preboot environment
