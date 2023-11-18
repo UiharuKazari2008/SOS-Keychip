@@ -1,4 +1,3 @@
-#include <Arduino.h>
 #include <ArduinoBearSSL.h>
 #include "SHA256.h"
 #include "device_key.h"
@@ -14,7 +13,6 @@ const String CRYPTO_VERSION = "2";
 // I love you Iona
 
 void setup() {
-  ledColor(255,0,212, 255);
   Serial.begin(4800);
   Serial.println("SG_CRYPTO_RESET");
 }
@@ -45,15 +43,11 @@ void loop() {
             String command = receivedMessage.substring(headerIndex + 1, commandIndex);
             if (command == "?") {
               Serial.println("SG_HELLO");
-              flashLED(250);
             } if (command == "1") {
               if (deviceReady == false && exchangeStage == 0) {
                 Serial.println("SG_UNLOCK");
                 deviceReady = true;
                 exchangeStage = 1;
-                ledColor(0, 255, 0, 255);
-                delay(100);
-                ledColor(0, 255, 0, 128);
               } else {
                 errorNumber = "0010";
                 lockDevice();
@@ -68,10 +62,6 @@ void loop() {
                 deviceReady = false;
                 exchangeStage = 0;
                 Serial.println("SG_LOCK");
-                ledColor(255, 0, 0, 255);
-                delay(100);
-                ledColor(255, 0, 0, 128);
-                delay(100);
               } else  {
                 errorNumber = "0011";
                 lockDevice();
@@ -87,16 +77,12 @@ void loop() {
                 Serial.println(keychipID);
                 deviceReady = true;
                 exchangeStage = 3;
-                ledColor(255, 128, 0, 255);
-                delay(100);
-                ledColor(255, 128, 0, 128);
               } else {
                 errorNumber = "0013";
                 lockDevice();
               }
             } else if (command == "10") {
               if (deviceReady == true && exchangeStage <= 2) {
-                ledColor(255, 0, 255, 255);
                 int appIDIndex = receivedMessage.indexOf("$", commandIndex + 1);
                 String appID = receivedMessage.substring(commandIndex + 1, appIDIndex);
                 int appCheckIndex = receivedMessage.indexOf("$", appIDIndex + 1);
@@ -126,8 +112,6 @@ void loop() {
                   }
                   Serial.println("x0");
                   open_disks[appDrive] = 1;
-                  delay(1000);
-                  ledColor(0, 255, 0, 128);
                   exchangeStage = 2;
                 } else {
                   if (appID != applicationID) {
@@ -156,28 +140,9 @@ void loop() {
   }
 }
 void lockDevice() {  
-  ledColor(255, 0, 0, 255);
   for(;;) {
     Serial.print("KEYCHIP_FAILURE_");
     Serial.println(errorNumber);
-    flashLED(500);
     delay(1000);
   }
-}
-void ledColor(int r, int g, int b, long brightness) {
-  active_r = r;
-  active_g = g;
-  active_b = b;
-  analogWrite(18, map(r, 255, 0, map(brightness, 255, 0, 0, 255), 255));
-  analogWrite(19, map(g, 255, 0, map(brightness, 255, 0, 0, 255), 255));
-  analogWrite(20, map(b, 255, 0, map(brightness, 255, 0, 0, 255), 255));
-}
-void flashLED(long time) {
-  analogWrite(18, map(active_r, 255, 0, 0, 255));
-  analogWrite(19, map(active_g, 255, 0, 0, 255));
-  analogWrite(20, map(active_b, 255, 0, 0, 255));
-  delay(time);
-  analogWrite(18, map(active_r, 255, 0, map(((deviceReady) ? 128 : 32), 255, 0, 0, 255), 255));
-  analogWrite(19, map(active_g, 255, 0, map(((deviceReady) ? 128 : 32), 255, 0, 0, 255), 255));
-  analogWrite(20, map(active_b, 255, 0, map(((deviceReady) ? 128 : 32), 255, 0, 0, 255), 255));
 }

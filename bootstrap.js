@@ -2,6 +2,7 @@ const fs = require('fs');
 const { SerialPort, ReadlineParser } = require('serialport');
 const yargs = require('yargs/yargs')
 const { hideBin } = require('yargs/helpers');
+const { exec, spawn } = require('child_process');
 const {PowerShell} = require("node-powershell");
 const {resolve} = require("path");
 const sleep = (waitTimeInMs) => new Promise(resolve => setTimeout(resolve, waitTimeInMs));
@@ -16,6 +17,7 @@ const cliArgs = yargs(hideBin(process.argv))
         description: 'Verbose Mode',
         hidden: true
     })
+
     .option('ivString', {
         type: 'string',
         description: 'Challenge String'
@@ -25,6 +27,7 @@ const cliArgs = yargs(hideBin(process.argv))
         type: 'string',
         description: 'Game ID'
     })
+
     .option('applicationVHD', {
         type: 'string',
         description: 'Application Disk Image'
@@ -37,6 +40,20 @@ const cliArgs = yargs(hideBin(process.argv))
         type: 'string',
         description: 'Options Disk Image'
     })
+
+    .option('launchApp', {
+        type: 'bool',
+        description: 'Run X:\game.ps1 after checkin and handle check-out on close'
+    })
+    .option('applicationExec', {
+        type: 'string',
+        description: 'File to execute instead of game.ps1'
+    })
+    .option('prepareScript', {
+        type: 'string',
+        description: 'PS1 Script to execute to prepare host'
+    })
+
     .option('updateMode', {
         type: 'bool',
         description: 'Enable Update Mode for Volumes'
@@ -48,6 +65,10 @@ const cliArgs = yargs(hideBin(process.argv))
     .option('encryptSetup', {
         type: 'bool',
         description: 'Setup Encryption of Volumes'
+    })
+    .option('dontCleanup', {
+        type: 'bool',
+        description: 'Do not unmount all disk images mounted'
     })
     .option('watchdog', {
         type: 'bool',
@@ -69,6 +90,7 @@ let returned_key = null;
 let keychip_id = null;
 let keychip_version = [0,0];
 let ready = false;
+let applicationArmed = false;
 
 async function startCheckIn() {
     ready = true;
@@ -186,7 +208,17 @@ async function startCheckIn() {
         } else {
             process.stdout.write(".[OK]\n");
         }
-        process.exit(0);
+        if (cliArgs.launchApp) {
+            if (cliArgs.verbose) {
+                console.log(`Launch App`);
+            } else {
+                process.stdout.write("アプリケーションソフトを起動する ... [OK]\n");
+            }
+            await runAppScript(`X:/${(cliArgs.applicationExec) ? cliArgs.applicationExec : 'game.ps1'}`);
+            await runCheckOut();
+        } else {
+            process.exit(0);
+        }
     } else {
         // Nothing to do, Check-Out Crypto
         setTimeout(() => {
@@ -247,6 +279,11 @@ async function runCommand(input, suppressOutput = false) {
         } finally {
             await ps.dispose();
         }
+    });
+}
+async function runAppScript(input) {
+    applicationArmed = spawn('powershell.exe', ['-File', input, '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+        stdio: 'inherit' // Inherit the standard IO of the Node.js process
     });
 }
 
@@ -339,24 +376,29 @@ parser.on('data', (data) => {
                 console.error(`Hardware Failure ${receivedData.replace("KEYCHIP_FAILURE_", "")}`);
             }
         }
-    } else if (receivedData === 'SG_HELLO' && ready === false) {
-        if (cliArgs.watchdog) {
-            lastCheckIn = new Date().valueOf();
-            clearTimeout(dropOutTimer);
-            dropOutTimer = setTimeout(() => {
-                process.exit(1);
-            }, 5000)
-        } else {
+    } else if (receivedData === 'SG_HELLO' && (cliArgs.watchdog || (applicationArmed !== false && cliArgs.launchApp))) {
+        lastCheckIn = new Date().valueOf();
+        clearTimeout(dropOutTimer);
+        dropOutTimer = setTimeout(() => {
             if (cliArgs.verbose) {
-                console.log(`Ready`);
-            } else {
-                process.stdout.write(".");
+                console.error(`Keychip Checkin Failed`);
             }
-            if (cliArgs.shutdown) {
-                runCheckOut();
+            if (applicationArmed !== false) {
+                applicationArmed.kill();
             } else {
-                port.write('@$1$!');
+                process.exit(1);
             }
+        }, 5000)
+    } else if (receivedData === 'SG_HELLO' && ready === false) {
+        if (cliArgs.verbose) {
+            console.log(`Ready`);
+        } else {
+            process.stdout.write(".");
+        }
+        if (cliArgs.shutdown) {
+            runCheckOut();
+        } else {
+            port.write('@$1$!');
         }
     } else if (receivedData.startsWith("SG_UNLOCK")) {
         if (!cliArgs.shutdown) {
@@ -380,20 +422,26 @@ port.on('error', (err) => {
         console.error(`Keychip Communication Error`, err);
     } else if (cliArgs.watchdog) {
         console.error(`Keychip Communication Error`);
+    } else if (applicationArmed) {
+        applicationArmed.kill();
     } else {
         process.stdout.write(".[FAIL]\n");
     }
-    process.exit(10);
+    if (!applicationArmed)
+        process.exit(10);
 });
 port.on('close', (err) => {
     if (cliArgs.verbose) {
         console.error(`Keychip Communication Closed`, err);
     } else if (cliArgs.watchdog) {
         console.error(`Keychip Removal`);
+    } else if (applicationArmed) {
+        applicationArmed.kill();
     } else {
         process.stdout.write(".[FAIL]\n");
     }
-    process.exit(10);
+    if (!applicationArmed)
+        process.exit(10);
 });
 
 // Handle the opening of the serial port
@@ -401,10 +449,27 @@ port.on('open', async () => {
     if (cliArgs.watchdog) {
         console.log(`Keychip Presence Armed`);
     } else {
+        if (cliArgs.launchApp) {
+            await runCommand('Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Confirm:$false -ErrorAction SilentlyContinue', true);
+        }
+        if (cliArgs.prepareScript) {
+            if (cliArgs.verbose) {
+                console.log(`Prepare Host`);
+            } else {
+                process.stdout.write("アプリケーションソフトを起動する ... [OK]\n");
+            }
+            await spawn('powershell.exe', ['-File', resolve(cliArgs.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+                stdio: 'inherit' // Inherit the standard IO of the Node.js process
+            });
+            await runCheckOut();
+        }
         if (cliArgs.verbose) {
             console.log(`Keychip Connected`);
         } else {
-            process.stdout.write(".");
+            process.stdout.write("アプリケーションデータのマウント .");
+        }
+        if (!cliArgs.dontCleanup) {
+            //await runCommand('Get-Disk -FriendlyName "Msft Virtual Disk" -ErrorAction SilentlyContinue | ForEach-Object { Dismount-VHD -DiskNumber $_.Number -Confirm:$false } | Out-Null', false);
         }
         port.write('@$5$!');
         await sleep(600);
@@ -413,4 +478,4 @@ port.on('open', async () => {
 });
 let pingTimer = setInterval(() => {
     port.write('@$?$!');
-}, ((cliArgs.watchdog) ? 1000 : 2000))
+}, ((cliArgs.watchdog || cliArgs.launchApp) ? 1000 : 2000))
