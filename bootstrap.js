@@ -1,6 +1,4 @@
-const exec = require('child_process').exec;
 const fs = require('fs');
-const shell = require('child-shell');
 const { SerialPort, ReadlineParser } = require('serialport');
 const yargs = require('yargs/yargs')
 const { hideBin } = require('yargs/helpers');
@@ -50,6 +48,10 @@ const cliArgs = yargs(hideBin(process.argv))
     .option('encryptSetup', {
         type: 'bool',
         description: 'Setup Encryption of Volumes'
+    })
+    .option('watchdog', {
+        type: 'bool',
+        description: 'Run as Watchdog to detect removal or failure'
     })
     .argv
 
@@ -321,24 +323,40 @@ async function encryptDisk(o) {
     return (!unlockCmd.hadErrors);
 }
 
+let dropOutTimer = null;
+let lastCheckIn = null;
+
 parser.on('data', (data) => {
     let receivedData = data.toString().trim();
     if (receivedData.startsWith('KEYCHIP_FAILURE_')) {
-        if (cliArgs.verbose) {
-            console.error(`Keychip is locked out, Press reset button or reconnect`);
-        } else {
+        if (cliArgs.watchdog) {
             console.error(`Hardware Failure ${receivedData.replace("KEYCHIP_FAILURE_", "")}`);
+            process.exit(100);
+        } else {
+            if (cliArgs.verbose) {
+                console.error(`Keychip is locked out, Press reset button or reconnect`);
+            } else {
+                console.error(`Hardware Failure ${receivedData.replace("KEYCHIP_FAILURE_", "")}`);
+            }
         }
     } else if (receivedData === 'SG_HELLO' && ready === false) {
-        if (cliArgs.verbose) {
-            console.log(`Ready`);
+        if (cliArgs.watchdog) {
+            lastCheckIn = new Date().valueOf();
+            clearTimeout(dropOutTimer);
+            dropOutTimer = setTimeout(() => {
+                process.exit(1);
+            }, 5000)
         } else {
-            process.stdout.write(".");
-        }
-        if (cliArgs.shutdown) {
-            runCheckOut();
-        } else {
-            port.write('@$1$!');
+            if (cliArgs.verbose) {
+                console.log(`Ready`);
+            } else {
+                process.stdout.write(".");
+            }
+            if (cliArgs.shutdown) {
+                runCheckOut();
+            } else {
+                port.write('@$1$!');
+            }
         }
     } else if (receivedData.startsWith("SG_UNLOCK")) {
         if (!cliArgs.shutdown) {
@@ -360,6 +378,8 @@ parser.on('data', (data) => {
 port.on('error', (err) => {
     if (cliArgs.verbose) {
         console.error(`Keychip Communication Error`, err);
+    } else if (cliArgs.watchdog) {
+        console.error(`Keychip Communication Error`);
     } else {
         process.stdout.write(".[FAIL]\n");
     }
@@ -368,6 +388,8 @@ port.on('error', (err) => {
 port.on('close', (err) => {
     if (cliArgs.verbose) {
         console.error(`Keychip Communication Closed`, err);
+    } else if (cliArgs.watchdog) {
+        console.error(`Keychip Removal`);
     } else {
         process.stdout.write(".[FAIL]\n");
     }
@@ -376,15 +398,19 @@ port.on('close', (err) => {
 
 // Handle the opening of the serial port
 port.on('open', async () => {
-    if (cliArgs.verbose) {
-        console.log(`Keychip Connected`);
+    if (cliArgs.watchdog) {
+        console.log(`Keychip Presence Armed`);
     } else {
-        process.stdout.write(".");
+        if (cliArgs.verbose) {
+            console.log(`Keychip Connected`);
+        } else {
+            process.stdout.write(".");
+        }
+        port.write('@$5$!');
+        await sleep(600);
+        port.write('@$?$!');
     }
-    port.write('@$5$!');
-    await sleep(600);
-    port.write('@$?$!');
 });
 let pingTimer = setInterval(() => {
     port.write('@$?$!');
-}, 2000)
+}, ((cliArgs.watchdog) ? 1000 : 2000))

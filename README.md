@@ -1,13 +1,10 @@
 <img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/Iona.jpg"/>
 
-# Savior of Song Keychip
+# Savior of Song "Iona" Hardware Keychip for Windows
 ALLS Keychip emulator designed to handle game disk encryption for peak realism on a non-official preboot environment
 
 ## Important Note!
 This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is designed to work with a sudo-ALLS setup where sgpreboot does not exist and is specically designed to recreate the hardware key requirement to use the game. This is not designed to be high security and can be intercepted without much work.
-
-## CHANGE OF OPERATIONS
-YOU MUST DECRYPT GAME DATA BEFORE UPDATING AND RE-ENCRYPT AFTER UPDATING, The password hash algorithm has changed and will not match previous disk passwords.
 
 ## Hardware
 Waveshare RP2040-GEEK<br>
@@ -214,7 +211,7 @@ Start-ScheduledTask -TaskName "EnableVNC" -ErrorAction SilentlyContinue
 Get-Process -Name inject_x86 -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
 Get-Process -Name inject_x64 -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
 Get-Process -Name <GAME_EXE> -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-Get-Process -Name savior_of_song_watchdog -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
+Get-Process -Name savior_of_song_keychip -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
 Get-AudioDevice -List | Where-Object { $_.Type -eq "Playback" -and $_.Name -like "VoiceMeeter Aux Input*" } | Set-AudioDevice | Out-Null
 if (Test-Path "X:\") {
     & C:\SEGA\system\savior_of_song_keychip.exe --ivString $game_iv --applicationID $game_id --applicationVHD $base --appDataVHD $data --optionVHD $option --shutdown
@@ -320,7 +317,7 @@ Write-Host " [OK]"
 
 Write-Host "############################"
 Start-Job -ScriptBlock {
-  & C:\SEGA\system\savior_of_song_watchdog.exe
+  & C:\SEGA\system\savior_of_song_keychip.exe --watchdog
   Get-Process -Name inject_x86 -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
   Get-Process -Name inject_x64 -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
   Get-Process -Name GAME_EXE -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
@@ -352,6 +349,6 @@ Contains all option folders and is empty by default
 
 ## Build EXE
 ```powershell
-nexe --input mount-disk.js --target windows-x64-14.15.3 --output .\build\savior_of_song_keychip.exe --ico .\icon.ico
-nexe --input watchdog.js --target windows-x64-14.15.3 --output .\build\savior_of_song_watchdog.exe --ico .\icon.ico
+pkg -t node18 --compress GZip .
+npx resedit --in .\build\RP-KeychipEmulator.exe --out .\build\savior_of_song_keychip.exe --icon 1,iona.ico --no-grow --company-name "Academy City Research P.S.R." --file-description "I-401 Keychip" --product-version 1.5.0.0 --product-name 'Savior Of Song Keychip "Iona"'
 ```
