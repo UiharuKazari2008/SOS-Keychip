@@ -42,6 +42,9 @@ const char* applicationIV = "EXPECTED_CLIENT_IV";
   * Version Explanation
     * ST7789 - Waveshare RP2040-GEEK
       * "Premium" Keychip with Display
+    * HS-ST7735 - Waveshare RP2040-GEEK
+      * High Security "Premium" Keychip with Display and OTA checkin
+      * Flash should be encypted with esptool
     * RGB_INV - Pimoroni Tiny2040 or Generic RP2040
       * Standard Generic Version with (or without) a LED (Inverted Output)
     * ARDUINO - Generic Arduino Version
