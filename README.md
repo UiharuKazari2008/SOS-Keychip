@@ -203,11 +203,23 @@ Write-Host ". [OK]"
 ```
 #### start.ps1
 This is what you call **as administrator** when you are starting the game
+* This will look for a USB Drive called "SOS_INS" and install the latest option packs into Z:\
+* Update must be 7z format and contain only option folders in the root of the archive
+* Installation of Option packs will cause a full check-in and check-out of the keychip in update mode, Please be present at the cabinet and ensure the host is secure as the disks will be read-write during the updates!
+* Later versions will support full installations based on the SOS VHD format and encrypted updates
 ```powershell
 Write-Host "############################"
-Write-Host " SEGA app_boot"
+Write-Host " SOS app_boot"
 Write-Host "############################"
 . .\enviorment.ps1
+if ((Get-Volume -FileSystemLabel SOS_INS -ErrorAction SilentlyContinue | Format-List).Length -gt 0) {
+    $letter = (Get-Volume -FileSystemLabel SOS_INS).DriveLetter
+    & C:\SEGA\system\savior_of_song_keychip.exe --ivString $game_iv --applicationID $game_id --applicationVHD $base --appDataVHD $data --optionVHD $option --updateMode
+    Get-ChildItem -Path "${letter}:\*.7z" | ForEach-Object {
+        & 'C:\Program Files\7-Zip\7z.exe' x -aoa -oZ:\ "${_}"
+    }
+    & C:\SEGA\system\savior_of_song_keychip.exe --applicationVHD $base --appDataVHD $data --optionVHD $option --shutdown
+}
 & C:\SEGA\system\savior_of_song_keychip.exe --ivString $game_iv --applicationID $game_id --applicationVHD $base --appDataVHD $data --optionVHD $option --prepareScript ".\prepare.ps1" --cleanupScript ".\shutdown.ps1" --launchApp
 ```
 #### stop.ps1
@@ -325,12 +337,6 @@ Sleep -Seconds 3
 Write-Host " [OK]"
 
 Write-Host "############################"
-Start-Job -ScriptBlock {
-  & C:\SEGA\system\savior_of_song_keychip.exe --watchdog
-  Get-Process -Name inject_x86 -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-  Get-Process -Name inject_x64 -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-  Get-Process -Name GAME_EXE -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-} | Out-Null
 cd X:\bin\
 Get-Process -Name amdaemon -ErrorAction SilentlyContinue | Stop-Process -Force:$true -ErrorAction SilentlyContinue
 Start-Process -WindowStyle Minimized -FilePath inject_x64.exe -ArgumentList "-d -k ${am_hook} amdaemon.exe -f -c ${am_opts}"
