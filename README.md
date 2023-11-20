@@ -1,10 +1,22 @@
 <img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/Iona.png"/>
 
 # Savior of Song "Iona" Hardware Keychip for Windows
-ALLS Keychip emulator designed to handle game disk encryption for peak realism on a non-official preboot environment
+Keychip emulator that handles game disk encryption and application lifecycle management for arcade cabinet or other applications
 
 ## Important Note!
 This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is designed to work with a sudo-ALLS setup where sgpreboot does not exist and is specically designed to recreate the hardware key requirement to use the game. This is not designed to be high security and can be intercepted without much work.
+
+## ToDo
+* Bi-Directional serial port communication encryption
+* Add special update password keystore for decrypting update files
+* Better lifecycle management
+* Segatools.ini keychip updates or direct integration to amdeamon
+* Support to auto-relaunch application on death
+
+## Use Cases
+* Protection of a game/application where you are distributing images that should only be used by someone that has a physical keychip
+* Protection of a game/application when the host in transport
+* Prevention of offline data scraping
 
 ## Hardware
 Waveshare RP2040-GEEK<br>
@@ -105,12 +117,11 @@ The keychip is designed to handle requests in a very specific order and if any c
       --watchdog         Run as Watchdog to detect removal or failure
 ```
 
-## Basic "just run the application" BAT file
-**RUN AS ADMINISTRATOR**
+## Basic "just run the application" BAT file<br/>
+**RUN AS ADMINISTRATOR**<br/>
+This will login and launch one of the following (X:\game.ps1 or X:\bin\game.bat)
 ```powershell
-savior_of_song_keychip.exe --ivString IV_STATIC_STRING_GOES_HERE --applicationID XXXX --applicationVHD app.vhd --optionVHD option.vhd
-X:\app\start.bat
-savior_of_song_keychip.exe --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
+savior_of_song_keychip.exe --ivString IV_STATIC_STRING_GOES_HERE --applicationID XXXX --applicationVHD app.vhd --optionVHD option.vhd --launchApp
 ```
 
 ## Creating your own sgpreboot (Fancy "this is a ALLS" setup)

@@ -104,9 +104,9 @@ options = {
     verbose: cliArgs.verbose || options.verbose,
     ivString: cliArgs.ivString || secureOptions.iv || options.iv,
     applicationID: cliArgs.applicationID || secureOptions.id || options.id,
-    applicationVHD: cliArgs.applicationVHD || options.app || "./app.vhd",
-    appDataVHD: cliArgs.appDataVHD || options.appdata || "./appdata.vhd",
-    optionVHD: cliArgs.optionVHD || options.option || "./option.vhd",
+    applicationVHD: cliArgs.applicationVHD || options.app,
+    appDataVHD: cliArgs.appDataVHD || options.appdata,
+    optionVHD: cliArgs.optionVHD || options.option,
     launchApp: cliArgs.launchApp || options.launch,
     applicationExec: cliArgs.applicationExec || options.app_script,
     prepareScript: cliArgs.prepareScript || options.prepare_script,
@@ -130,16 +130,14 @@ if (cliArgs.versionFile) {
     };
 }
 
-const application_version = 1.6;
+const application_version = 1.7;
 const expected_crypto_version = 2;
 const min_firmware_version = 1.1;
 
 if (options.verbose)
     console.log(`Savior of Song Keychip Bootstrap v${application_version} by Yukimi Kazari`);
-
-if (options.verbose) {
+if (options.verbose)
     console.log(options);
-}
 
 const port = new SerialPort({path: options.port, baudRate: 4800});
 const parser = port.pipe(new ReadlineParser({delimiter: '\n'}));
@@ -159,7 +157,7 @@ async function startCheckIn() {
             process.stdout.write(".[FAIL]\n");
         }
         port.write('@$0$!');
-        process.exit(102);
+        ps.dispose().then(r => process.exit(102));
     }
     if (keychip_version[1] !== expected_crypto_version) {
         if (options.verbose) {
@@ -173,7 +171,7 @@ async function startCheckIn() {
             process.stdout.write(".[FAIL]\n");
         }
         port.write('@$0$!');
-        process.exit(102);
+        ps.dispose().then(r => process.exit(102));
     }
     if (options.applicationVHD || options.optionVHD || options.appDataVHD) {
         if (options.applicationVHD && options.ivString) {
@@ -186,7 +184,7 @@ async function startCheckIn() {
                             if (!options.verbose) {
                                 process.stdout.write(".[FAIL]\n");
                             }
-                            process.exit(99);
+                            ps.dispose().then(r => process.exit(99));
                         }
                     } else {
                         const unlockCmd = await unlockDisk({diskNumber: 0, mountPoint: 'X:\\',});
@@ -194,20 +192,20 @@ async function startCheckIn() {
                             if (!options.verbose) {
                                 process.stdout.write(".[FAIL]\n");
                             }
-                            process.exit(103);
+                            ps.dispose().then(r => process.exit(103));
                         }
                     }
                 } else {
                     if (!options.verbose) {
                         process.stdout.write(".[FAIL]\n");
                     }
-                    process.exit(102);
+                    ps.dispose().then(r => process.exit(102));
                 }
             } else {
                 if (!options.verbose) {
                     process.stdout.write(".[FAIL]\n");
                 }
-                process.exit(101);
+                ps.dispose().then(r => process.exit(101));
             }
         }
         if (options.optionVHD && options.ivString) {
@@ -220,7 +218,7 @@ async function startCheckIn() {
                             if (!options.verbose) {
                                 process.stdout.write(".[FAIL]\n");
                             }
-                            process.exit(99);
+                            ps.dispose().then(r => process.exit(99));
                         }
                     } else {
                         const unlockCmd = await unlockDisk({diskNumber: 1, mountPoint: 'Z:\\',});
@@ -228,20 +226,20 @@ async function startCheckIn() {
                             if (!options.verbose) {
                                 process.stdout.write(".[FAIL]\n");
                             }
-                            process.exit(103);
+                            ps.dispose().then(r => process.exit(103));
                         }
                     }
                 } else {
                     if (!options.verbose) {
                         process.stdout.write(".[FAIL]\n");
                     }
-                    process.exit(102);
+                    ps.dispose().then(r => process.exit(102));
                 }
             } else {
                 if (!options.verbose) {
                     process.stdout.write(".[FAIL]\n");
                 }
-                process.exit(101);
+                ps.dispose().then(r => process.exit(101));
             }
         }
         if (options.appDataVHD) {
@@ -251,13 +249,13 @@ async function startCheckIn() {
                     if (!options.verbose) {
                         process.stdout.write(".[FAIL]\n");
                     }
-                    process.exit(102);
+                    ps.dispose().then(r => process.exit(102));
                 }
             } else {
                 if (!options.verbose) {
                     process.stdout.write(".[FAIL]\n");
                 }
-                process.exit(101);
+                ps.dispose().then(r => process.exit(101));
             }
         }
         port.write('@$11$!');
@@ -270,42 +268,36 @@ async function startCheckIn() {
             if (options.verbose) {
                 console.log(`Launch App`);
             } else {
-                process.stdout.write("アプリケーションソフトを起動する ... [OK]\n");
+                process.stdout.write("アプリケーションソフトを起動する ...");
             }
-            await runAppScript(`X:/${(options.applicationExec) ? options.applicationExec : 'game.ps1'}`);
-            process.stdout.write("\nアプリケーションをシャットダウンする .");
-            await runCheckOut(!!(options.cleanupScript));
-            if (options.cleanupScript) {
-                await new Promise((ok) => {
-                    const prepare = spawn('powershell.exe', ['-File', resolve(options.cleanupScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
-                        stdio: 'inherit' // Inherit the standard IO of the Node.js process
-                    });
-                    prepare.on('exit', function() {
-                        ok()
-                    })
-                    prepare.on('close', function() {
-                        ok()
-                    })
-                    prepare.on('end', function() {
-                        ok()
-                    })
-                })
+            if (options.applicationExec) {
+                if (fs.existsSync(resolve(`X:/${options.applicationExec}`))) {
+                    process.stdout.write("[OK]\n");
+                    await runAppScript(`X:/${options.applicationExec}`, options.applicationExec.endsWith('.bat'));
+                }
+            } else if (fs.existsSync(resolve(`X:/game.ps1`))) {
+                process.stdout.write("[OK]\n");
+                await runAppScript(`X:/game.ps1`);
+            } else if (fs.existsSync(resolve(`X:/bin/game.bat`))) {
+                process.stdout.write("[OK]\n");
+                await runAppScript(`X:/bin/game.bat`, true);
+            } else {
+                process.stdout.write("[FAIL]\n起動するアプリケーションが見つかりませんでした!\n\n");
             }
-            if (!options.dontCleanup) {
-                await runCommand('Get-Disk -FriendlyName "Msft Virtual Disk" -ErrorAction SilentlyContinue | ForEach-Object { Dismount-DiskImage -DevicePath $_.Path -Confirm:$false } | Out-Null', false);
-            }
+            process.stdout.write("\nちょっと待ってください .");
+            await runCheckOut();
         } else {
-            process.exit(0);
+            ps.dispose().then(r => process.exit(0));
         }
     } else {
         // Nothing to do, Check-Out Crypto
         setTimeout(() => {
             port.write('@$0$!');
-            process.exit(1);
+            ps.dispose().then(r => process.exit(1));
         }, 1000);
     }
 }
-async function runCheckOut(no_exit) {
+async function runCheckOut() {
     ready = true;
     if (options.applicationVHD) {
         await dismountCmd({
@@ -332,21 +324,39 @@ async function runCheckOut(no_exit) {
     } else {
         process.stdout.write(".[OK]\n");
     }
+    port.write('@$0$!');
+    if (options.cleanupScript) {
+        await new Promise((ok) => {
+            const prepare = spawn('powershell.exe', ['-File', resolve(options.cleanupScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+                stdio: 'inherit' // Inherit the standard IO of the Node.js process
+            });
+            prepare.on('exit', function() {
+                ok()
+            })
+            prepare.on('close', function() {
+                ok()
+            })
+            prepare.on('end', function() {
+                ok()
+            })
+        })
+    }
+    if (!options.dontCleanup) {
+        await runCommand('Get-Disk -FriendlyName "Msft Virtual Disk" -ErrorAction SilentlyContinue | ForEach-Object { Dismount-DiskImage -DevicePath $_.Path -Confirm:$false } | Out-Null', false);
+    }
     setTimeout(() => {
-        port.write('@$0$!');
-        if (!no_exit)
-            process.exit(0);
-    }, 1000);
+            ps.dispose().then(r => process.exit(0));
+        }, 1000);
 }
 
+const ps = new PowerShell({
+    executableOptions: {
+        '-ExecutionPolicy': 'Bypass',
+        '-NoProfile': true,
+    },
+});
 async function runCommand(input, suppressOutput = false) {
     return new Promise(async ok => {
-        const ps = new PowerShell({
-            executableOptions: {
-                '-ExecutionPolicy': 'Bypass',
-                '-NoProfile': true,
-            },
-        });
         try {
             const printCommand = PowerShell.command([input]);
             const result = await ps.invoke(printCommand);
@@ -355,14 +365,12 @@ async function runCommand(input, suppressOutput = false) {
         } catch (error) {
             if (options.verbose) { console.error(error); }
             ok(false);
-        } finally {
-            await ps.dispose();
         }
     });
 }
-async function runAppScript(input) {
+async function runAppScript(input, is_bat) {
     return new Promise((ok) => {
-        applicationArmed = spawn('powershell.exe', ['-File', input, '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+        applicationArmed = spawn(((is_bat) ? 'cmd.exe' : 'powershell.exe'), ((is_bat) ? ['/c', input] : ['-File', input, '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true']), {
             stdio: 'inherit' // Inherit the standard IO of the Node.js process
         });
         applicationArmed.on('exit', function() {
@@ -458,7 +466,7 @@ parser.on('data', (data) => {
     if (receivedData.startsWith('KEYCHIP_FAILURE_')) {
         if (cliArgs.watchdog) {
             console.error(`Hardware Failure ${receivedData.replace("KEYCHIP_FAILURE_", "")}`);
-            process.exit(100);
+            ps.dispose().then(r => process.exit(100));
         } else {
             if (options.verbose) {
                 console.error(`Keychip is locked out, Press reset button or reconnect`);
@@ -476,7 +484,7 @@ parser.on('data', (data) => {
             if (applicationArmed !== false) {
                 applicationArmed.kill("SIGINT");
             } else {
-                process.exit(1);
+                ps.dispose().then(r => process.exit(1));
             }
         }, 5000)
     } else if (receivedData === 'SG_HELLO' && ready === false) {
@@ -503,8 +511,14 @@ parser.on('data', (data) => {
         returned_key = receivedData.substring(11).trim().split("x0")[0];
     } else if (receivedData.startsWith("KEYCHIP_ID_")) {
         keychip_id = receivedData.substring(11).trim();
+        if (options.verbose) {
+            console.log(`Keychip ID: ${keychip_id}`);
+        }
     } else if (receivedData.startsWith("FIRMWARE_VER_")) {
         keychip_version = receivedData.split(' ').map(e => parseFloat(e.split('_VER_')[1]));
+        if (options.verbose) {
+            console.log(`Keychip Version: ${keychip_version.join('-')}`);
+        }
     }
 });
 port.on('error', (err) => {
@@ -518,7 +532,7 @@ port.on('error', (err) => {
         process.stdout.write(".[FAIL]\n");
     }
     if (!applicationArmed)
-        process.exit(10);
+        ps.dispose().then(r => process.exit(10));
 });
 port.on('close', (err) => {
     if (options.verbose) {
@@ -531,7 +545,7 @@ port.on('close', (err) => {
         process.stdout.write(".[FAIL]\n");
     }
     if (!applicationArmed)
-        process.exit(10);
+        ps.dispose().then(r => process.exit(10));
 });
 
 // Handle the opening of the serial port
@@ -564,6 +578,8 @@ port.on('open', async () => {
         }
         if (options.verbose) {
             console.log(`Keychip Connected`);
+        } else if (cliArgs.shutdown) {
+            process.stdout.write("ちょっと待ってください .");
         } else {
             process.stdout.write("アプリケーションデータのマウント .");
         }
