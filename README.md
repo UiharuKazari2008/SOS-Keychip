@@ -23,6 +23,25 @@ Waveshare RP2040-GEEK<br>
 <img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/IMG_5948.jpg"/><br>
 or any generic RP2040/[Arduino USB Dongle](https://a.co/d/fG1uoK3)
 
+## Lifecycle
+In order of operation
+1. Client opens serial port
+2. Client takes ownership of hardware and enters ready state
+3. Client requests firmware/crypto scheme versions
+4. Client mounts disk and prepares BitLocker unlock request
+5. Client requests disk password with ID and IV
+6. Keychip replys with disk password
+7. Client uses password to unlock disk
+8. Repeat step 3 until all disks are ready
+9. Client requests full Keychip ID
+10. Client injects KID into deamon
+11. Client starts application and continues to ping keychip
+    * If hardware is removed application will terminate and will panic eject all media
+    * In RO setup, when cabinet is powered off (Steps 12 and beyond are not done) keychip should show RESET_OK when powered on
+12. Waits for application to be terminated
+13. Disks are locked and unmounted
+14. Keychip is locked and placed in a offline state
+
 ## Setup
 0. Download the latest executables (and VHD Images if this is your first time)
   * https://github.com/UiharuKazari2008/SOS-Keychip/releases/download/release/savior_of_song_keychip.exe
