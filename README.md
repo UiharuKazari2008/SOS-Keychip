@@ -63,7 +63,10 @@ const char* applicationIV = "EXPECTED_CLIENT_IV";
 const char* initCommunicationLKey = "INITAL_128_AES_KEY";
 const char* ininCommunicationIV = "INITAL_128_IV_KEY";
 ```
-2. Launch Arduino IDE and flash the firmware
+2. Create CMAK authentication string
+    * Authentication String should be a [base64 encoded string](https://www.bing.com/search?q=base64+encode) like bellow with each value separated by spaces
+    * `GAMEID INITAL_128_AES_KEY INITAL_128_IV_KEY`
+3. Launch Arduino IDE and flash the firmware
   * Install the following libraries with the library manager
     * ArduinoBearSSL
     * Adafruit_ST7789 (ONLY If your using the ST7789 version)
@@ -80,41 +83,41 @@ const char* ininCommunicationIV = "INITAL_128_IV_KEY";
       * You must install the following libraries 
         * [Arduino-SHA-256](https://github.com/manutenfruits/Arduino-SHA-256/tree/master) 
         * [ArduinoMD5](https://github.com/tzikis/ArduinoMD5/tree/master)
-3. Copy the exe in folder with the blank VHD to your new game folder
-4. Mount and Encrypt the volumes<br>
+4. Copy the exe in folder with the blank VHD to your new game folder
+5. Mount and Encrypt the volumes<br>
 **RUN AS ADMINISTRATOR**
 ```powershell
-& ./savior_of_song_keychip.exe --loginKey INITAL_128_AES_KEY --loginIV INITAL_128_IV_KEY --applicationID XXXX --applicationVHD app.vhd --optionVHD option.vhd --encryptSetup
+& ./savior_of_song_keychip.exe  --auth AUTH_STRING --applicationVHD app.vhd --optionVHD option.vhd --encryptSetup
 ```
-5. Run the Keychip bootstrap<br>
-**RUN AS ADMINISTRATOR**
-  * Keychip should be on `COM5` or use `--port COM#` to change
-```powershell
-& ./savior_of_song_keychip.exe --loginKey INITAL_128_AES_KEY --loginIV INITAL_128_IV_KEY --applicationID XXXX --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd
-```
-  * Game ID and IV String MUST MATCH device_key.h at all times!
-  * Disks will be mounted to the following locations:
+* Disks will be mounted to the following locations:
     * app -> X:\
     * appdata -> Y:\
     * option -> Z:\
     * **Please keep any existing volumes not mounted there!**
-6. When Encryption is completed, and you have loaded your game data then checkout the keychip<br>
+
+6. When Encryption is completed and you have loaded the application, then checkout the keychip<br>
 **RUN AS ADMINISTRATOR**
 ```powershell
-& ./savior_of_song_keychip.exe --loginKey INITAL_128_AES_KEY --loginIV INITAL_128_IV_KEY --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
+& ./savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
+```
+7. Run the Keychip bootstrap<br>
+**RUN AS ADMINISTRATOR**
+  * Keychip should be on `COM5` or use `--port COM#` to change
+```powershell
+& ./savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd
 ```
 
 ## Update Games Data
 To update option data you must add `--updateMode` to enable read-write access
 ```powershell
-& ./savior_of_song_keychip.exe --loginKey INITAL_128_AES_KEY --loginIV INITAL_128_IV_KEY --applicationID XXXX --optionVHD option.vhd --updateMode
+& ./savior_of_song_keychip.exe --auth AUTH_STRING --optionVHD option.vhd --updateMode
 ```
   * Remember to --shutdown or the hardware will lockout
 
 ## Proper Shutdown
 If you are not restarting/powering off your hardware after the game, you must check-out otherwise the keychip will lockout. Run this command after game exe has close.
 ```powershell
-& ./savior_of_song_keychip.exe --loginKey INITAL_128_AES_KEY --loginIV INITAL_128_IV_KEY --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
+& ./savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
 ```
 
 ## Error Codes
@@ -152,36 +155,36 @@ iitYXRMMBRVYVRRXRRRXXXXRRXRWXitIt+i++;:::::::;=iti;::==;;+tit+=;=iitIYYIXXtYVIYY
 BBBRRVYYYYXRRRRXRRRVYVRRXIYXi++tI+;=====;:::::::;+t=::::::::=IttIYYIIYIIVYYYVIYY
 YXXXVYYVXRRRRXXRRRYYYVRXI+==+itIYi=;;;=======;::::=I+::::::::iYXVVVYYIIIYIttYIII
 XXYtYVRRRRRVVXRRXY++YXXI+==++tYYI====;;=======;::tXIi=:::::::iYIitIYIIIIIIIIYIII
-Savior of Song Keychip v2.7
+Savior of Song Keychip v2.10
 by Kazari
 
-Initializing ...Options:
-  --help             Show help                                         [boolean]
-  --version          Show version number                               [boolean]
-  --port             Keychip Serial Port                                [string]
-  --loginKey         Key used to login to Keychip                       [string]
-  --loginIV          IV used to login to Keychip                        [string]
-  --applicationID    Game ID                                            [string]
-  --applicationVHD   Application Disk Image                             [string]
-  --appDataVHD       App Data Disk Image                                [string]
-  --optionVHD        Options Disk Image                                 [string]
-  --env              Environment Configuration File                     [string]
-  --secureEnv        Secure Environment Configuration File              [string]
-  --launchApp        Run X:game.ps1 after checkin and handle check-out on close
-  --applicationExec  File to execute instead of game.ps1                [string]
-  --prepareScript    PS1 Script to execute to prepare host              [string]
-  --cleanupScript    PS1 Script to execute when shutting down           [string]
-  --updateMode       Enable Update Mode for Volumes
-  --shutdown         Shutdown Volumes (Check-Out)
-  --encryptSetup     Setup Encryption of Volumes
-  --dontCleanup      Do not unmount all disk images mounted
+Options:
+  -c, --port             Keychip Serial Port
+                         COM5 is default port                           [string]
+  -a, --auth             CMAK Authentication String
+                         Base64 Encoded "GAMEID AES_KEY AES_IV"         [string]
+  -x, --applicationVHD   Application Disk Image (X:\)                   [string]
+  -y, --appDataVHD       Configuration Disk Image (Y:\)                 [string]
+  -z, --optionVHD        Options Disk Image (Z:\)                       [string]
+  -e, --env              Environment Configuration File                 [string]
+  -s, --secureEnv        Environment Configuration File (Secured File)  [string]
+      --applicationExec  File to execute (must be in X:\)
+                         Default order:
+                         X:\game.ps1
+                         X:\bin\game.bat                                [string]
+  -p, --prepareScript    PS1 Script to execute to prepare host          [string]
+  -q, --cleanupScript    PS1 Script to execute when shutting down       [string]
+      --updateMode       Mount as ReadWrite Mode and Detach Keychip
+      --shutdown         Unmount and Check-Out
+      --encryptSetup     Setup Encryption of Application Volumes
+      --dontCleanup      Do not unmount all disk images mounted
 ```
 
 ## Basic "just run the application" BAT file<br/>
 **RUN AS ADMINISTRATOR**<br/>
 This will login and launch one of the following (X:\game.ps1 or X:\bin\game.bat)
 ```powershell
-savior_of_song_keychip.exe --loginKey INITAL_128_AES_KEY --loginIV INITAL_128_IV_KEY --applicationID XXXX --applicationVHD app.vhd --optionVHD option.vhd --launchApp
+savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd
 ```
 
 ## Creating your own sgpreboot (Fancy "this is a ALLS" setup)
@@ -197,8 +200,7 @@ secure.ps1
 This is placed inside the system folder because it should be protected by BitLocker
 ```powershell
 $game_id = "XXXX"
-$keychip_key = "INITAL_128_AES_KEY"
-$keychip_iv = "INITAL_128_AES_IV"
+$keychip_auth = "AUTH_STRING"
 ```
 ### Application Folder
 This should be located in a decrypted partition mounted at `S:\XXXX` (where **XXXX** is your game id), it should cotain the following files:<br/>
@@ -259,13 +261,9 @@ This file should contain tasks like:
 This is a example:
 ```powershell
 Get-Process -Name slidershim -ErrorAction SilentlyContinue | Stop-Process -ErrorAction Stop
-Write-Host "." -NoNewline
 Get-Process | Where-Object {$_.MainWindowTitle -eq "Sequenzia - [InPrivate]"} | Stop-Process -ErrorAction SilentlyContinue
-Write-Host "." -NoNewline
 Stop-ScheduledTask -TaskName "StartHDMIAudio" -ErrorAction SilentlyContinue
-Write-Host "." -NoNewline
 taskkill /F /IM explorer.exe | Out-Null
-Write-Host "." -NoNewline
 if ($(Get-Process -Name mono-to-stereo -ErrorAction SilentlyContinue).Count -gt 0) {
     Get-Process -Name mono-to-stereo -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
 }
@@ -280,13 +278,13 @@ This is what you call **as administrator** when you are starting the game
 . .\enviorment.ps1
 if ((Get-Volume -FileSystemLabel SOS_INS -ErrorAction SilentlyContinue | Format-List).Length -gt 0) {
     $letter = (Get-Volume -FileSystemLabel SOS_INS).DriveLetter
-    & C:\SEGA\system\savior_of_song_keychip.exe --loginKey $keychip_key --loginIV $keychip_iv --applicationID $game_id --applicationVHD $base --appDataVHD $data --optionVHD $option --updateMode
+    & C:\SEGA\system\savior_of_song_keychip.exe --auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --updateMode
     Get-ChildItem -Path "${letter}:\*.7z" | ForEach-Object {
         & 'C:\Program Files\7-Zip\7z.exe' x -aoa -oZ:\ "${_}"
     }
-    & C:\SEGA\system\savior_of_song_keychip.exe --loginKey $keychip_key --loginIV $keychip_iv --applicationVHD $base --appDataVHD $data --optionVHD $option --shutdown
+    & C:\SEGA\system\savior_of_song_keychip.exe --auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --shutdown
 }
-& C:\SEGA\system\savior_of_song_keychip.exe --loginKey $keychip_key --loginIV $keychip_iv --applicationID $game_id --applicationVHD $base --appDataVHD $data --optionVHD $option --prepareScript ".\prepare.ps1" --cleanupScript ".\shutdown.ps1" --launchApp
+& C:\SEGA\system\savior_of_song_keychip.exe --auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --prepareScript ".\prepare.ps1" --cleanupScript ".\shutdown.ps1" --launchApp
 ```
 #### stop.ps1
 Closes the application to allow the keychip to shutdown
@@ -313,9 +311,9 @@ cd S:\XXXX\
 
 . .\enviorment.ps1
 . .\dismount.ps1
-& C:\SEGA\system\savior_of_song_keychip.exe --loginKey $keychip_key --loginIV $keychip_iv --applicationID $game_id --applicationVHD $base --appDataVHD $data --optionVHD $option --updateMode
+& C:\SEGA\system\savior_of_song_keychip.exe --auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --updateMode
 Read-Host "Press Enter to unmount"
-& C:\SEGA\system\savior_of_song_keychip.exe --loginKey $keychip_key --loginIV $keychip_iv --applicationVHD $base --appDataVHD $data --optionVHD $option --shutdown
+& C:\SEGA\system\savior_of_song_keychip.exe --auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --shutdown
 ```
 
 ### Application VHD Filesystems

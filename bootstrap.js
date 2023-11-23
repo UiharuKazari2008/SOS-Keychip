@@ -1,4 +1,4 @@
-const application_version = 2.7;
+const application_version = 2.9;
 const expected_crypto_version = 2;
 const min_firmware_version = 2.0;
 process.stdout.write('[34m:[34m:[34m:[34m:[34m:[34m;[36mt[37mX[97m#[97mW[97m#[97m#[97m#[97m#[97mW[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97mW[97mW[97m#[97m#[97m#[37mB[37mV[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[94m=[34m;[34m:[34m;[94mi[36mt[37mB[37mB[97mW[37mB[37mX[37mV[36mI[90mI[37mV[37mB[37mM[97mW[37mM[37mX[94mY[94mI[94mt[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[34m+[94mI[94mI[34m+[34m=[0m\n' +
@@ -32,14 +32,16 @@ const {PowerShell} = require("node-powershell");
 const {resolve, join} = require("path");
 const crypto = require('crypto-js');
 const sleep = (waitTimeInMs) => new Promise(resolve => setTimeout(resolve, waitTimeInMs));
-process.stdout.write("Initializing ...");
+const cliProgress = require('cli-progress');
+const colors = require('ansi-colors');
 
 let options = {};
 let secureOptions = {};
 const cliArgs = yargs(hideBin(process.argv))
     .option('port', {
+        alias: 'c',
         type: 'string',
-        description: 'Keychip Serial Port'
+        description: 'Keychip Serial Port\nCOM5 is default port'
     })
     .option('verbose', {
         alias: 'v',
@@ -48,76 +50,88 @@ const cliArgs = yargs(hideBin(process.argv))
         hidden: true
     })
 
-    .option('loginKey', {
+    .option('auth', {
+        alias: 'a',
         type: 'string',
-        description: 'Key used to login to Keychip'
-    })
-    .option('loginIV', {
-        type: 'string',
-        description: 'IV used to login to Keychip'
-    })
-
-    .option('applicationID', {
-        type: 'string',
-        description: 'Game ID'
+        description: 'CMAK Authentication String\nBase64 Encoded "GAMEID AES_KEY AES_IV"'
     })
 
     .option('applicationVHD', {
+        alias: 'x',
         type: 'string',
-        description: 'Application Disk Image'
+        description: 'Application Disk Image (X:\\)'
     })
     .option('appDataVHD', {
+        alias: 'y',
         type: 'string',
-        description: 'App Data Disk Image'
+        description: 'Configuration Disk Image (Y:\\)'
     })
     .option('optionVHD', {
+        alias: 'z',
         type: 'string',
-        description: 'Options Disk Image'
+        description: 'Options Disk Image (Z:\\)'
     })
 
     .option('env', {
+        alias: 'e',
         type: 'string',
         description: 'Environment Configuration File'
     })
     .option('secureEnv', {
+        alias: 's',
         type: 'string',
-        description: 'Secure Environment Configuration File'
+        description: 'Environment Configuration File (Secured File)'
     })
 
-    .option('launchApp', {
-        type: 'bool',
-        description: 'Run X:\game.ps1 after checkin and handle check-out on close'
-    })
     .option('applicationExec', {
         type: 'string',
-        description: 'File to execute instead of game.ps1'
+        description: 'File to execute (must be in X:\\)\nDefault order:\nX:\\game.ps1\nX:\\bin\\game.bat'
     })
     .option('prepareScript', {
+        alias: 'p',
         type: 'string',
         description: 'PS1 Script to execute to prepare host'
     })
     .option('cleanupScript', {
+        alias: 'q',
         type: 'string',
         description: 'PS1 Script to execute when shutting down'
     })
 
     .option('updateMode', {
         type: 'bool',
-        description: 'Enable Update Mode for Volumes'
+        description: 'Mount as ReadWrite Mode and Detach Keychip'
     })
     .option('shutdown', {
         type: 'bool',
-        description: 'Shutdown Volumes (Check-Out)'
+        description: 'Unmount and Check-Out'
     })
     .option('encryptSetup', {
         type: 'bool',
-        description: 'Setup Encryption of Volumes'
+        description: 'Setup Encryption of Application Volumes'
     })
     .option('dontCleanup', {
         type: 'bool',
         description: 'Do not unmount all disk images mounted'
     })
     .argv
+
+
+const subar = new cliProgress.SingleBar({
+    format: '{stage} ({value}/{total}) |' + colors.cyan('{bar}') + '| {percentage}%',
+    barCompleteChar: '\u2588',
+    barIncompleteChar: '\u2591',
+    hideCursor: true
+});
+const sdbar = new cliProgress.SingleBar({
+    format: '{stage} ({value}/{total}) |' + colors.redBright('{bar}') + '| {percentage}%',
+    barCompleteChar: '\u2588',
+    barIncompleteChar: '\u2591',
+    hideCursor: true
+});
+subar.start(25, 0, {
+    stage: "Initialization"
+});
 
 if (cliArgs.env && fs.existsSync(resolve(cliArgs.env))) {
     secureOptions = JSON.parse(fs.readFileSync(resolve(cliArgs.env)).toString());
@@ -129,18 +143,39 @@ options = {
     ...options,
     port: cliArgs.port || options.port || "COM5",
     verbose: cliArgs.verbose || options.verbose,
-    loginKey: cliArgs.loginKey || secureOptions.login_key || options.login_key,
-    loginIV: cliArgs.loginIV || secureOptions.login_iv || options.login_iv,
-    applicationID: cliArgs.applicationID || secureOptions.id || options.id,
+    loginKey: secureOptions.login_key || options.login_key,
+    loginIV: secureOptions.login_iv || options.login_iv,
+    applicationID: secureOptions.id || options.id,
     applicationVHD: cliArgs.applicationVHD || options.app,
     appDataVHD: cliArgs.appDataVHD || options.appdata,
     optionVHD: cliArgs.optionVHD || options.option,
-    launchApp: cliArgs.launchApp || options.launch,
     applicationExec: cliArgs.applicationExec || options.app_script,
     prepareScript: cliArgs.prepareScript || options.prepare_script,
     cleanupScript: cliArgs.cleanupScript || options.cleanup_script,
     dontCleanup: cliArgs.dontCleanup || options.no_dismount_vhds,
 };
+if (cliArgs.auth) {
+    // XXXX KEY IV
+    try {
+        const authString = Buffer.from(cliArgs.auth, 'base64').toString('ascii');
+        if (!authString)
+            throw new Error('No String');
+        const authArray = authString.split(' ');
+        if (authArray.length !== 3)
+            throw new Error('Invalid Auth String Format');
+
+        options.applicationID = authArray[0];
+        options.loginKey = authArray[1];
+        options.loginIV = authArray[2];
+    } catch (err) {
+        subar.stop();
+        if (options.verbose) {
+            console.error(`Failed to decode auth string: ${err.message}`);
+        } else {
+            console.error('\nInvalid Authentication');
+        }
+    }
+}
 if (cliArgs.versionFile) {
     const vf = JSON.parse(fs.readFileSync(resolve(cliArgs.versionFile)).toString());
     const versionFile = {
@@ -148,7 +183,6 @@ if (cliArgs.versionFile) {
         applicationVHD: vf.app,
         appDataVHD: vf.appdata,
         optionVHD: vf.option,
-        launchApp: vf.launch,
         applicationExec: vf.app_script
     }
     options = {
@@ -170,11 +204,11 @@ if (options.verbose)
 
 const port = new SerialPort({path: options.port, baudRate: 4800});
 const parser = port.pipe(new ReadlineParser({delimiter: '\n'}));
-process.stdout.write(".");
+subar.increment();
 
 let returned_key = null;
 let keychip_id = null;
-let keychip_version = [0, 0];
+let keychip_version = [0, 0, null];
 let ready = false;
 let applicationArmed = false;
 let encryptedMode = !!(cliArgs.shutdown);
@@ -184,15 +218,17 @@ let currentIV = options.loginIV;
 async function startCheckIn() {
     ready = true;
     if (parseFloat(keychip_version[0]) < min_firmware_version) {
+        subar.stop();
         if (options.verbose) {
             console.error(`Firmware "${keychip_version[0]}" is outdated, please flash the latest version!`);
         } else {
-            process.stdout.write(".[FAIL]\n");
+            console.error('\nKeychip Firmware Outdated');
         }
         sendMessage('0');
         ps.dispose().then(r => process.exit(102));
     }
     if (parseFloat(keychip_version[1]) !== expected_crypto_version) {
+        subar.stop();
         if (options.verbose) {
             console.error(`Disk Decryption Scheme (${keychip_version[1]} != ${expected_crypto_version}) Mismatch!`);
             console.error(`## IMPORTANT NOTICE ###############################################################`);
@@ -201,12 +237,15 @@ async function startCheckIn() {
             console.error(`Once decrypted, you can update the bootstrap and firmware and run --encryptSetup`);
             console.error(`###################################################################################`);
         } else {
-            process.stdout.write(".[FAIL]\n");
+            console.error('\nKeychip Crypto Mismatch');
         }
         sendMessage('0');
         ps.dispose().then(r => process.exit(102));
     }
     if (options.applicationVHD || options.optionVHD || options.appDataVHD) {
+        subar.update(10, {
+            stage: "Mount Application"
+        });
         if (options.applicationVHD) {
             if (fs.existsSync(options.applicationVHD)) {
                 const prepareCmd = await prepareDisk({
@@ -214,35 +253,16 @@ async function startCheckIn() {
                     mountPoint: 'X:\\',
                     writeAccess: !!(cliArgs.updateMode || cliArgs.encryptSetup)
                 });
-                if (prepareCmd) {
-                    if (cliArgs.encryptSetup) {
-                        const encryptCmd = await encryptDisk({diskNumber: 0, mountPoint: 'X:\\',});
-                        if (!encryptCmd) {
-                            if (!options.verbose) {
-                                process.stdout.write(".[FAIL]\n");
-                            }
-                            ps.dispose().then(r => process.exit(99));
-                        }
-                    } else {
-                        const unlockCmd = await unlockDisk({diskNumber: 0, mountPoint: 'X:\\',});
-                        if (!unlockCmd) {
-                            if (!options.verbose) {
-                                process.stdout.write(".[FAIL]\n");
-                            }
-                            ps.dispose().then(r => process.exit(103));
-                        }
-                    }
+                if (!prepareCmd) {
+                    subar.stop();
+                    console.error('\nFailed to Prepare Disk');
+                    await ps.dispose().then(r => process.exit(102));
                 } else {
-                    if (!options.verbose) {
-                        process.stdout.write(".[FAIL]\n");
-                    }
-                    ps.dispose().then(r => process.exit(102));
+                    subar.increment();
                 }
             } else {
-                if (!options.verbose) {
-                    process.stdout.write(".[FAIL]\n");
-                }
-                ps.dispose().then(r => process.exit(101));
+                subar.increment();
+                await ps.dispose().then(r => process.exit(101));
             }
         }
         if (options.optionVHD) {
@@ -252,34 +272,14 @@ async function startCheckIn() {
                     mountPoint: 'Z:\\',
                     writeAccess: !!(cliArgs.updateMode || cliArgs.encryptSetup)
                 });
-                if (prepareCmd) {
-                    if (cliArgs.encryptSetup) {
-                        const encryptCmd = await encryptDisk({diskNumber: 1, mountPoint: 'Z:\\',});
-                        if (!encryptCmd) {
-                            if (!options.verbose) {
-                                process.stdout.write(".[FAIL]\n");
-                            }
-                            ps.dispose().then(r => process.exit(99));
-                        }
-                    } else {
-                        const unlockCmd = await unlockDisk({diskNumber: 1, mountPoint: 'Z:\\',});
-                        if (!unlockCmd) {
-                            if (!options.verbose) {
-                                process.stdout.write(".[FAIL]\n");
-                            }
-                            ps.dispose().then(r => process.exit(103));
-                        }
-                    }
-                } else {
-                    if (!options.verbose) {
-                        process.stdout.write(".[FAIL]\n");
-                    }
-                    ps.dispose().then(r => process.exit(102));
+                if (!prepareCmd) {
+                    subar.stop();
+                    console.error('\nFailed to Prepare Disk');
+                    await ps.dispose().then(r => process.exit(102));
                 }
             } else {
-                if (!options.verbose) {
-                    process.stdout.write(".[FAIL]\n");
-                }
+                subar.stop();
+                console.error('\nFailed to Locate Disk');
                 ps.dispose().then(r => process.exit(101));
             }
         }
@@ -291,23 +291,69 @@ async function startCheckIn() {
                     writeAccess: true
                 });
                 if (!prepareCmd) {
-                    if (!options.verbose) {
-                        process.stdout.write(".[FAIL]\n");
-                    }
-                    ps.dispose().then(r => process.exit(102));
+                    subar.stop();
+                    console.error('\nFailed to Prepare Disk');
+                    await ps.dispose().then(r => process.exit(102));
                 }
             } else {
-                if (!options.verbose) {
-                    process.stdout.write(".[FAIL]\n");
-                }
+                subar.stop();
+                console.error('\nFailed to Locate Disk');
                 ps.dispose().then(r => process.exit(101));
             }
         }
         if (options.verbose) {
-            console.log(`Done`);
-        } else {
-            process.stdout.write(".[OK]\n");
+            console.log(`Disk Setup Complete`);
         }
+        subar.update(15, {
+            stage: (cliArgs.encryptSetup) ? "Encrypt Application" :"Authorize Application"
+        });
+
+        if (cliArgs.encryptSetup) {
+            if (options.applicationVHD && fs.existsSync(options.applicationVHD)) {
+                const encryptCmd = await encryptDisk({diskNumber: 0, mountPoint: 'X:\\',});
+                if (!encryptCmd) {
+                    subar.stop();
+                    console.error('\nFailed to Encrypt Disk');
+                    ps.dispose().then(r => process.exit(99));
+                } else {
+                    subar.increment();
+                }
+            }
+            if (options.optionVHD && fs.existsSync(options.optionVHD)) {
+                const encryptCmd = await encryptDisk({diskNumber: 1, mountPoint: 'Z:\\',});
+                if (!encryptCmd) {
+                    subar.stop();
+                    console.error('\nFailed to Encrypt Disk');
+                    ps.dispose().then(r => process.exit(99));
+                } else {
+                    subar.increment();
+                }
+            }
+        } else {
+            if (options.applicationVHD && fs.existsSync(options.applicationVHD)) {
+                const unlockCmd = await unlockDisk({diskNumber: 0, mountPoint: 'X:\\',});
+                if (!unlockCmd) {
+                    subar.stop();
+                    console.error('\nFailed to Unlock Disk');
+                    ps.dispose().then(r => process.exit(103));
+                } else {
+                    subar.increment();
+                }
+            }
+            if (options.optionVHD && fs.existsSync(options.optionVHD)) {
+                const unlockCmd = await unlockDisk({diskNumber: 1, mountPoint: 'Z:\\',});
+                if (!unlockCmd) {
+                    subar.stop();
+                    console.error('\nFailed to Unlock Disk');
+                    ps.dispose().then(r => process.exit(103));
+                } else {
+                    subar.increment();
+                }
+            }
+        }
+        if (options.verbose)
+            console.log(`Unlock Done`);
+        subar.update(24);
         sendMessage('11');
     } else {
         // Nothing to do, Check-Out Crypto
@@ -318,36 +364,44 @@ async function startCheckIn() {
     }
 }
 async function postCheckIn() {
-    if (options.launchApp) {
+    if (!(cliArgs.updateMode || cliArgs.shutdown || cliArgs.encryptSetup)) {
         if (options.verbose) {
             console.log(`Launch App`);
-        } else {
-            process.stdout.write("Starting Application ...");
         }
+        subar.update(25, {
+            stage: "Launch Application"
+        });
+        await sleep(100);
+        subar.stop();
         if (options.applicationExec) {
             if (fs.existsSync(resolve(`X:/${options.applicationExec}`))) {
-                process.stdout.write("[OK]\n");
+                process.stdout.write("\n");
                 await runAppScript(`X:/${options.applicationExec}`, options.applicationExec.endsWith('.bat'));
             }
         } else if (fs.existsSync(resolve(`X:/game.ps1`))) {
-            process.stdout.write("[OK]\n");
+            process.stdout.write("\n");
             await runAppScript(`X:/game.ps1`);
         } else if (fs.existsSync(resolve(`X:/bin/game.bat`))) {
-            process.stdout.write("[OK]\n");
+            process.stdout.write("\n");
             await runAppScript(`X:/bin/game.bat`, true);
         } else {
-            process.stdout.write("[FAIL]\nNo application was found to start!\n\n");
+            process.stdout.write("\nNo application was found!\n\n");
         }
-        process.stdout.write("\nPlease Wait .");
+        process.stdout.write("\n");
         await runCheckOut();
-    } else {
-        if (cliArgs.updateMode) {
-            clearTimeout(watchdog);
-            sendMessage("2");
-        }
+    } else if (cliArgs.updateMode || cliArgs.encryptSetup) {
+        subar.update(25, {
+            stage: "Detach Keychip"
+        });
+        clearTimeout(watchdog);
+        sendMessage("2");
     }
 }
 async function runCheckOut() {
+    subar.stop();
+    sdbar.start(10,0, {
+        stage: "Dismount Application"
+    })
     ready = true;
     if (options.applicationVHD) {
         await dismountCmd({
@@ -371,11 +425,16 @@ async function runCheckOut() {
     }
     if (options.verbose) {
         console.log(`Wait for Check-Out`);
-    } else {
-        process.stdout.write(".[OK]\n");
     }
+    sdbar.increment();
+    sdbar.update(8, {
+        stage: "Release Keychip"
+    })
     sendMessage('0');
     if (options.cleanupScript) {
+        sdbar.update(9, {
+            stage: "Cleanup System"
+        })
         await new Promise((ok) => {
             const prepare = spawn('powershell.exe', ['-File', resolve(options.cleanupScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
                 stdio: 'inherit' // Inherit the standard IO of the Node.js process
@@ -390,10 +449,15 @@ async function runCheckOut() {
                 ok()
             })
         })
+        sdbar.increment();
     }
+    sdbar.update(10, {
+        stage: "Shutdown Complete"
+    })
     if (!options.dontCleanup) {
         await runCommand('Get-Disk -FriendlyName "Msft Virtual Disk" -ErrorAction SilentlyContinue | ForEach-Object { Dismount-DiskImage -DevicePath $_.Path -Confirm:$false } | Out-Null', false);
     }
+    sdbar.stop();
     setTimeout(() => {
         ps.dispose().then(r => process.exit(0));
     }, 1000);
@@ -441,29 +505,26 @@ async function runAppScript(input, is_bat) {
 }
 
 async function prepareDisk(o) {
-    if (options.verbose) {
-        console.log(`Prepare Volume ${o.mountPoint}`);
-    } else {
-        process.stdout.write(".");
-    }
+    subar.increment();
     // Remove any existing disk mounts
     await runCommand(`Dismount-DiskImage -ImagePath "${resolve(o.disk)}" -Confirm:$false -ErrorAction SilentlyContinue`, true);
     // Attach the disk to the drive letter or folder
+    subar.increment();
     const mountCmd = await runCommand(`Mount-DiskImage -ImagePath "${resolve(o.disk)}" -StorageType VHD -NoDriveLetter -Passthru -Access ${(o.writeAccess) ? 'ReadWrite' : 'ReadOnly'} -Confirm:$false -ErrorAction Stop | Get-Disk | Get-Partition | where { ($_ | Get-Volume) -ne $Null } | Add-PartitionAccessPath -AccessPath ${o.mountPoint} -ErrorAction Stop | Out-Null`, true);
-    return (!mountCmd.hadErrors);
+    return (mountCmd);
 }
 async function dismountCmd(o) {
     if (options.verbose && o.lockDisk) {
         console.log(`Lock Volume ${o.mountPoint}`);
     } else if (o.lockDisk) {
-        process.stdout.write(".");
+        sdbar.increment();
     }
     if (o.lockDisk)
         await runCommand(`Lock-BitLocker -MountPoint "${o.mountPoint}" -ForceDismount -Confirm:$false -ErrorAction SilentlyContinue`);
     if (options.verbose) {
         console.log(`Dismount Volume ${o.mountPoint}`);
     } else {
-        process.stdout.write(".");
+        sdbar.increment();
     }
     // Remove any existing disk mounts
     await runCommand(`Dismount-DiskImage -ImagePath "${resolve(o.disk)}" -Confirm:$false -ErrorAction SilentlyContinue`, true);
@@ -473,7 +534,7 @@ async function unlockDisk(o) {
     if (options.verbose) {
         console.log(`Request Unlock ${o.diskNumber}`);
     } else {
-        process.stdout.write(".");
+        subar.increment();
     }
     returned_key = null;
     // Request the keychip to give decryption key for applicationID with a diskNumber
@@ -487,17 +548,17 @@ async function unlockDisk(o) {
     if (options.verbose) {
         console.log(`Key Unlock ${o.diskNumber}`);
     } else {
-        process.stdout.write(".");
+        subar.increment();
     }
     const unlockCmd = await runCommand(`Unlock-BitLocker -MountPoint "${o.mountPoint}" -Password $(ConvertTo-SecureString -String "${returned_key}" -AsPlainText -Force) -Confirm:$false -ErrorAction Stop`);
     returned_key = null;
-    return (!unlockCmd.hadErrors);
+    return (unlockCmd);
 }
 async function encryptDisk(o) {
     if (options.verbose) {
         console.log(`Request Encrypt ${o.diskNumber}`);
     } else {
-        process.stdout.write(".");
+        subar.increment();
     }
     returned_key = null;
     // Request the keychip to give decryption key for applicationID with a ivString and diskNumber
@@ -510,11 +571,11 @@ async function encryptDisk(o) {
     if (options.verbose) {
         console.log(`Key Encrypt ${o.diskNumber}`);
     } else {
-        process.stdout.write(".");
+        subar.increment();
     }
     const unlockCmd = await runCommand(`Enable-BitLocker -MountPoint "${o.mountPoint}" -EncryptionMethod XtsAes256 -UsedSpaceOnly -SkipHardwareTest -PasswordProtector -Password $(ConvertTo-SecureString -String "${returned_key}" -AsPlainText -Force) -Confirm:$false -ErrorAction Stop`);
     returned_key = null;
-    return (!unlockCmd.hadErrors);
+    return (unlockCmd);
 }
 
 function sendMessage(message) {
@@ -590,9 +651,9 @@ function parseIncomingMessage(receivedData) {
         if (options.verbose) {
             console.error(`Keychip is locked out, Press reset button or reconnect`);
         } else {
-            console.error(`Hardware Failure ${receivedData.replace("KEYCHIP_FAILURE_", "")}`);
+            console.error(`\nHardware Failure ${receivedData.replace("KEYCHIP_FAILURE_", "")}`);
         }
-    } else if (receivedData === 'SG_HELLO' && (applicationArmed !== false && options.launchApp)) {
+    } else if (receivedData === 'SG_HELLO' && (applicationArmed !== false && !(cliArgs.updateMode && cliArgs.shutdown && cliArgs.encryptMode))) {
         lastCheckIn = new Date().valueOf();
         clearTimeout(dropOutTimer);
         dropOutTimer = setTimeout(() => {
@@ -608,9 +669,8 @@ function parseIncomingMessage(receivedData) {
     } else if (receivedData === 'SG_HELLO' && ready === false) {
         if (options.verbose) {
             console.log(`Ready`);
-        } else {
-            process.stdout.write(".");
         }
+        subar.increment();
         if (cliArgs.shutdown) {
             runCheckOut();
         } else {
@@ -627,14 +687,11 @@ function parseIncomingMessage(receivedData) {
         if (options.verbose) {
             console.log(`Switching to Encrypted Mode`);
         }
+        subar.increment();
         encryptedMode = true;
     } else if (receivedData.startsWith("SG_UNLOCK")) {
+        subar.increment();
         if (!cliArgs.shutdown) {
-            if (options.verbose) {
-                console.log(`Lifesycle started`);
-            } else {
-                process.stdout.write(".");
-            }
             startCheckIn();
         }
     } else if (receivedData.startsWith("CRYPTO_KEY_")) {
@@ -644,12 +701,14 @@ function parseIncomingMessage(receivedData) {
         if (options.verbose) {
             console.log(`Keychip ID: ${keychip_id}`);
         }
+        subar.increment();
         postCheckIn();
     } else if (receivedData.startsWith("FIRMWARE_VER_")) {
-        keychip_version = receivedData.split(' ').map(e => e.split('_VER_')[1]);
+        keychip_version = receivedData.split(' ').map(e => e.split('_VER_').pop());
         if (options.verbose) {
             console.log(`Keychip Version: ${keychip_version.join('-')}`);
         }
+        subar.increment();
     }
 }
 
@@ -671,9 +730,11 @@ port.on('error', (err) => {
         applicationArmed.kill("SIGINT");
     } else {
         if (err.message.includes("File not found")) {
-            console.error('.[FAIL]\nKeychip not found');
+            subar.stop();
+            console.error('\nKeychip not found');
         } else {
-            process.stdout.write(".[FAIL]\n");
+            subar.stop();
+            console.error('\nKeychip Hardware Failure');
         }
     }
     if (!applicationArmed)
@@ -687,9 +748,11 @@ port.on('close', (err) => {
         applicationArmed.kill("SIGINT");
     } else {
         if (err.message.includes("File not found")) {
+            subar.stop();
             console.error('\nKeychip not found');
         } else {
-            process.stdout.write(".[FAIL]\n");
+            subar.stop();
+            console.error('\nKeychip Hardware Failure');
         }
     }
     if (!applicationArmed)
@@ -698,21 +761,15 @@ port.on('close', (err) => {
 
 // Handle the opening of the serial port
 port.on('open', async () => {
-    if (options.launchApp) {
-        await runCommand('Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Confirm:$false -ErrorAction SilentlyContinue', true);
-    }
-    if (!(options.launchApp || cliArgs.launchApp || cliArgs.updateMode || cliArgs.shutdown || cliArgs.encryptSetup)) {
-        process.stdout.write(".[FAIL]\n");
-        process.exit(100);
-    } else {
-        process.stdout.write(".[OK]\n");
-    }
+    await runCommand('Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Confirm:$false -ErrorAction SilentlyContinue', true);
+    subar.increment();
     if (options.prepareScript) {
         if (options.verbose) {
             console.log(`Prepare Host`);
-        } else {
-            process.stdout.write("Preparing .");
         }
+        subar.update(3, {
+            stage: "Preparing System"
+        });
         await new Promise((ok) => {
             const prepare = spawn('powershell.exe', ['-File', resolve(options.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
                 stdio: 'inherit' // Inherit the standard IO of the Node.js process
@@ -727,17 +784,13 @@ port.on('open', async () => {
                 ok()
             })
         })
-        if (!options.verbose) {
-            process.stdout.write(".[OK]\n");
-        }
     }
     if (options.verbose) {
         console.log(`Keychip Connected`);
-    } else if (cliArgs.shutdown) {
-        process.stdout.write("Please Wait .");
-    } else {
-        process.stdout.write("Mount Application .");
     }
+    subar.update(4, {
+        stage: "Preparing Keychip"
+    });
     if (!options.dontCleanup) {
         await runCommand('Get-Disk -FriendlyName "Msft Virtual Disk" -ErrorAction SilentlyContinue | ForEach-Object { Dismount-DiskImage -DevicePath $_.Path -Confirm:$false } | Out-Null', false);
     }
@@ -745,5 +798,5 @@ port.on('open', async () => {
     sendMessage('?');
     watchdog = setInterval(() => {
         sendMessage('?');
-    }, ((options.launchApp) ? 1000 : 2000));
+    }, ((!(cliArgs.updateMode && cliArgs.shutdown && cliArgs.encryptMode)) ? 1000 : 2000));
 });
