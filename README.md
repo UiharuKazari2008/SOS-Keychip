@@ -28,7 +28,7 @@ In order of operation
 1. Client opens serial port
 2. Client takes ownership of hardware and enters ready state
 3. Client requests firmware/crypto scheme versions
-4. Client switches Keychip to Level 1 (Cycling Key Encrypted Mode)
+4. Client switches Keychip to Level 1 or CMAK (Cycling Message Authentication Keying)
 5. Client mounts disk and prepares BitLocker unlock request
 6. Client requests disk password with ID and IV
 7. Keychip replys with disk password
