@@ -108,9 +108,9 @@ const char* ininCommunicationIV = "INITAL_128_IV_KEY";
 ```
 
 ## Update Games Data
-To update option data you must add `--updateMode` to enable read-write access
+To update option data you must add `--editMode` to enable read-write access
 ```powershell
-& ./savior_of_song_keychip.exe --auth AUTH_STRING --optionVHD option.vhd --updateMode
+& ./savior_of_song_keychip.exe --auth AUTH_STRING --optionVHD option.vhd --editMode
 ```
   * Remember to --shutdown or the hardware will lockout
 
@@ -170,11 +170,19 @@ Options:
   -s, --secureEnv        Environment Configuration File (Secured File)  [string]
       --applicationExec  File to execute (must be in X:\)
                          Default order:
-                         X:\game.ps1
-                         X:\bin\game.bat                                [string]
+                         1. X:\<applicationExec>
+                         2. X:\game.ps1
+                         3. X:\bin\game.bat                             [string]
   -p, --prepareScript    PS1 Script to execute to prepare host          [string]
   -q, --cleanupScript    PS1 Script to execute when shutting down       [string]
-      --updateMode       Mount as ReadWrite Mode and Detach Keychip
+      --update           Mount Application with write access and run update
+                         script (must be in X:\)
+                         Default Order:
+                         1. X:\update.ps1 (Load Option Pack)
+                         2. X:\download.ps1 (SOS Download Order Update Script)
+                         3. X:\bin\update.bat
+      --editMode         Mount as ReadWrite Mode and Detach Keychip to modify
+                         application files
       --shutdown         Unmount and Check-Out
       --encryptSetup     Setup Encryption of Application Volumes
       --dontCleanup      Do not unmount all disk images mounted
@@ -188,7 +196,7 @@ savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appData
 ```
 
 ## Creating your own sgpreboot (Fancy "this is a ALLS" setup)
-**C:\ should be encrypted with TPM at all times and enable write filter for C:\ if required**<br/>
+**C:\ MUST be encrypted with TPM at all times and enable write filter for C:\ if required**<br/>
 
 ### System Folder
 The system folder should be located in `C:\SEGA\system` and contain the following files:<br>
@@ -214,13 +222,13 @@ d-----        09/11/2023     19:25                preboot_data
 d-----        09/11/2023     19:18                V0001
 d-----        09/11/2023     19:18                V0002
 -a----        09/11/2023     21:25            632 enviorment.ps1
--a----        09/11/2023     21:45            222 mount-direct.ps1
+-a----        09/11/2023     21:45            222 mount.ps1
 -a----        09/11/2023     21:22            869 prepare.ps1
 -a----        09/11/2023     21:22            869 cleanup.ps1
 -a----        13/11/2023     23:03            844 start.ps1
 -a----        10/11/2023     02:04           1182 stop.ps
 ```
-Each game version should be in a separate folder and contain the VHDs<br/>
+Each game version/edition should be in a separate folder and contain the VHDs<br/>
 ```
     Directory: S:\XXXX\V0001
 
@@ -252,101 +260,14 @@ $option = "${install}\option.vhd"
 ```
 Create a if statement for each version you would want to "disk swap" with, set the version in the `preboot_data\disk` file (just a number or string)
 #### prepare.ps1
+**This is only a example file and will for obvious reason not work for you**<br/>
+A lot of my tasks are done via task scheduler to allow for asynchronous tasks and to handle elevation if used by another system<br/>
 This file should contain tasks like:
 * Setting audio devices
 * Rotate Display
 * Set Display Refresh Rate
 * Close Applications
 * Enter Lockdown Mode
-This is a example:
-```powershell
-Get-Process -Name slidershim -ErrorAction SilentlyContinue | Stop-Process -ErrorAction Stop
-Get-Process | Where-Object {$_.MainWindowTitle -eq "Sequenzia - [InPrivate]"} | Stop-Process -ErrorAction SilentlyContinue
-Stop-ScheduledTask -TaskName "StartHDMIAudio" -ErrorAction SilentlyContinue
-taskkill /F /IM explorer.exe | Out-Null
-if ($(Get-Process -Name mono-to-stereo -ErrorAction SilentlyContinue).Count -gt 0) {
-    Get-Process -Name mono-to-stereo -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-}
-```
-#### start.ps1
-This is what you call **as administrator** when you are starting the game
-* This will look for a USB Drive called "SOS_INS" and install the latest option packs into Z:\
-* Update must be 7z format and contain only option folders in the root of the archive
-* Installation of Option packs will cause a full check-in and check-out of the keychip in update mode, Please be present at the cabinet and ensure the host is secure as the disks will be read-write during the updates!
-* Later versions will support full installations based on the SOS VHD format and encrypted updates
-```powershell
-. .\enviorment.ps1
-if ((Get-Volume -FileSystemLabel SOS_INS -ErrorAction SilentlyContinue | Format-List).Length -gt 0) {
-    $letter = (Get-Volume -FileSystemLabel SOS_INS).DriveLetter
-    & C:\SEGA\system\savior_of_song_keychip.exe --auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --updateMode
-    Get-ChildItem -Path "${letter}:\*.7z" | ForEach-Object {
-        & 'C:\Program Files\7-Zip\7z.exe' x -aoa -oZ:\ "${_}"
-    }
-    & C:\SEGA\system\savior_of_song_keychip.exe --auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --shutdown
-}
-& C:\SEGA\system\savior_of_song_keychip.exe --auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --prepareScript ".\prepare.ps1" --cleanupScript ".\shutdown.ps1" --launchApp
-```
-#### stop.ps1
-Closes the application to allow the keychip to shutdown
-```powershell
-Get-Process -Name inject_x86 -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-Get-Process -Name inject_x64 -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-Get-Process -Name <GAME_EXE> -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-```
-`<GAME_EXE>` is the actual games process name, like *mercury*
-#### cleanup.ps1
-What is called to stop the game processes and clean up (needed if your automating and this is a multi-purpose system)
-```powershell
-. .\enviorment.ps1
-if ((Get-Process -Name explorer).Length -eq 0) { & explorer.exe }
-Start-ScheduledTask -TaskName "JVSDisable" -ErrorAction Stop
-Stop-ScheduledTask -TaskName "StartALLSRuntime" -ErrorAction SilentlyContinue
-Start-ScheduledTask -TaskName "EnableVNC" -ErrorAction SilentlyContinue
-Get-AudioDevice -List | Where-Object { $_.Type -eq "Playback" -and $_.Name -like "VoiceMeeter Aux Input*" } | Set-AudioDevice | Out-Null
-```
-#### mount-direct.ps1
-Used to mount the game disks as update mode
-```powershell
-cd S:\XXXX\
-
-. .\enviorment.ps1
-. .\dismount.ps1
-& C:\SEGA\system\savior_of_song_keychip.exe --auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --updateMode
-Read-Host "Press Enter to unmount"
-& C:\SEGA\system\savior_of_song_keychip.exe --auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --shutdown
-```
-
-### Application VHD Filesystems
-#### app.vhd
-This should contain the base application and all thats required to run the application
-```
-    Directory: X:\
-
-
-Mode                 LastWriteTime         Length Name
-----                 -------------         ------ ----
-d-----        08/11/2023     15:46                bin
--a----        10/11/2023     02:04           1182 game.ps1
-
-
-    Directory: X:\bin
-
-
-Mode                 LastWriteTime         Length Name
-----                 -------------         ------ ----
-d----l        08/11/2023     15:46                amfs
-d----l        08/11/2023     15:46                appdata
-d----l        08/11/2023     15:46                option
--a---l        08/11/2023     15:45              0 segatools.ini
-```
-This will be a Read-Only filesystem when active
-* `amfs` links to Y:\amfs
-* `appdata` links to Y:\appdata
-* `options` links to Z:\
-* `segatools.ini` links to Y:\segatools.ini
-##### game.ps1
-This is the script to launch the game. 
-This is considered "secure" and is located in the game to prevent modification 
 ```powershell
 . S:\XXXX\enviorment.ps1
 $Mouse=@' 
@@ -373,19 +294,96 @@ Process {
 
     }
 }
-Move-Mouse -X 1920 -y 0 | Out-Null
 
+Get-Process -Name slidershim -ErrorAction SilentlyContinue | Stop-Process -ErrorAction Stop # Only used for Sequenzia ADS UI and kill to release slider for game
+Get-Process | Where-Object {$_.MainWindowTitle -eq "Sequenzia - [InPrivate]"} | Stop-Process -ErrorAction SilentlyContinue
+Get-Process | Where-Object {$_.MainWindowTitle -eq "CHUN - [InPrivate]"} | Stop-Process -ErrorAction SilentlyContinue
+Stop-ScheduledTask -TaskName "StartHDMIAudio" -ErrorAction SilentlyContinue
+taskkill /F /IM explorer.exe | Out-Null
+if ($(Get-Process -Name mono-to-stereo -ErrorAction SilentlyContinue).Count -gt 0) {
+    Get-Process -Name mono-to-stereo -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
+}
+Get-AudioDevice -List | Where-Object { $_.Type -eq "Playback" -and $_.Name -like "${audio_dev}" } | Set-AudioDevice -ErrorAction Stop | Out-Null # Set System Audio to Multichannel Sound Card
+Start-ScheduledTask -TaskName "JVSEnable" -ErrorAction Stop # PowerShell.exe -WindowStyle hidden -Command "Get-PnpDevice -InstanceId 'USB\VID_0CA3&PID_0021\6&3A944CE5&0&2' | Enable-PnpDevice -Confirm:$false"
+Start-ScheduledTask -TaskName "LockdownFirewall" -ErrorAction Stop
+
+Move-Mouse -X 1920 -y 0 | Out-Null
+```
+#### start.ps1
+This is what you call **as administrator** when you are starting the game
+* This will look for a USB Drive called "SOS_INS" and if found run the update script
+* Then run the keychip booting the default application script
+```powershell
+. .\enviorment.ps1
+if ((Get-Volume -FileSystemLabel SOS_INS -ErrorAction SilentlyContinue | Format-List).Length -gt 0) {
+    Start-Process -Wait -WindowStyle Normal -FilePath "C:\SEGA\system\savior_of_song_keychip.exe" -ArgumentList "--auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --update"
+}
+Start-Process -Wait -WindowStyle Normal -FilePath "C:\SEGA\system\savior_of_song_keychip.exe" -ArgumentList "--auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --prepareScript prepare.ps1 --cleanupScript shutdown.ps1"
+```
+#### stop.ps1
+Closes the application to allow the keychip to shutdown
+```powershell
+Get-Process -Name inject_x86 -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
+Get-Process -Name inject_x64 -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
+Get-Process -Name <GAME_EXE> -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
+```
+`<GAME_EXE>` is the actual games process name, like *mercury*
+#### cleanup.ps1
+What is called to stop the game processes and clean up (needed if your automating and this is a multi-purpose system)
+```powershell
+. .\enviorment.ps1
+if ((Get-Process -Name explorer).Length -eq 0) { & explorer.exe }
+Start-ScheduledTask -TaskName "JVSDisable" -ErrorAction Stop # PowerShell.exe -WindowStyle hidden -Command "Get-PnpDevice -InstanceId 'USB\VID_0CA3&PID_0021\6&3A944CE5&0&2' | Disable-PnpDevice -Confirm:$false"
+Start-ScheduledTask -TaskName "EnableVNC" -ErrorAction SilentlyContinue # PowerShell.exe -WindowStyle hidden -Command "Start-Service -Name tvnserver"
+Get-AudioDevice -List | Where-Object { $_.Type -eq "Playback" -and $_.Name -like "VoiceMeeter Aux Input*" } | Set-AudioDevice | Out-Null
+```
+#### mount.ps1
+Used to mount disks as read-write to performance manual modifitications
+```powershell
+cd S:\XXXX\
+
+. .\enviorment.ps1
+Start-Process -Wait -WindowStyle Normal -FilePath "C:\SEGA\system\savior_of_song_keychip.exe" -ArgumentList "--auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --editMode"
+Read-Host "Press key to dismount"
+Start-Process -Wait -WindowStyle Normal -FilePath "C:\SEGA\system\savior_of_song_keychip.exe" -ArgumentList "--auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --shutdown"
+```
+### Application VHD Filesystems
+#### app.vhd
+This should contain the base application and all thats required to run the application
+```
+    Directory: X:\
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d-----        08/11/2023     15:46                bin
+-a----        10/11/2023     02:04           1182 game.ps1
+-a----        10/11/2023     02:04           1182 update.ps1
+
+
+    Directory: X:\bin
+
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----l        08/11/2023     15:46                amfs
+d----l        08/11/2023     15:46                appdata
+d----l        08/11/2023     15:46                option
+-a---l        08/11/2023     15:45              0 segatools.ini
+```
+This will be a Read-Only filesystem when active
+* `amfs` links to Y:\amfs
+* `appdata` links to Y:\appdata
+* `options` links to Z:\
+* `segatools.ini` links to Y:\segatools.ini
+##### game.ps1
+This is the script to launch the game. 
+This is considered "secure" and is located in the game to prevent modification 
+```powershell
 $game_exec = "GAME_NAME.exe"
 $game_hook = "GAME_HOOK.dll"
 $am_hook = "AM_HOOK.dll"
 $am_opts = "JSON FILES"
-
-Write-Host "Preparing Hardware ..." -NoNewline
-Get-AudioDevice -List | Where-Object { $_.Type -eq "Playback" -and $_.Name -like "${audio_dev}" } | Set-AudioDevice -ErrorAction Stop | Out-Null
-Write-Host "." -NoNewline
-Start-ScheduledTask -TaskName "JVSEnable" -ErrorAction Stop
-Sleep -Seconds 3
-Write-Host " [OK]"
 
 Write-Host "############################"
 cd X:\bin\
@@ -397,6 +395,22 @@ Write-Host "############################"
 Write-Host " TERMINATED"
 Write-Host "############################"
 ```
+##### update.ps1 or download.ps1
+* Update must be 7z format and contain only option folders in the root of the archive
+* Installation of Option packs will cause a full check-in and check-out of the keychip in update mode, Please be present at the cabinet and ensure the host is secure as the disks will be read-write during the updates!
+* Later versions will support full installations based on the SOS VHD format and encrypted updates
+```powershell
+if ((Get-Volume -FileSystemLabel SOS_INS -ErrorAction SilentlyContinue | Format-List).Length -gt 0) {
+    $letter = (Get-Volume -FileSystemLabel SOS_INS).DriveLetter
+    Get-ChildItem -Path "${letter}:\*.7z" | ForEach-Object {
+        & 'C:\Program Files\7-Zip\7z.exe' x -aoa -oZ:\ "${_}"
+    }
+    Write-Host "Update Complete!"
+}
+```
+If you have a remote update script that was provided by your network administrator then it should be placed in the X:\ drive and no update.ps1 should be present<br/>
+This project is not responsible for the creation or maintenance of said scripts
+
 #### appdata.vhd
 This is Read-Write storage for all app data and configuration files
 ```powershell

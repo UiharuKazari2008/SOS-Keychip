@@ -1,4 +1,4 @@
-const application_version = 2.9;
+const application_version = 2.11;
 const expected_crypto_version = 2;
 const min_firmware_version = 2.0;
 process.stdout.write('[34m:[34m:[34m:[34m:[34m:[34m;[36mt[37mX[97m#[97mW[97m#[97m#[97m#[97m#[97mW[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97mW[97mW[97m#[97m#[97m#[37mB[37mV[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[94m=[34m;[34m:[34m;[94mi[36mt[37mB[37mB[97mW[37mB[37mX[37mV[36mI[90mI[37mV[37mB[37mM[97mW[37mM[37mX[94mY[94mI[94mt[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[34m+[94mI[94mI[34m+[34m=[0m\n' +
@@ -23,6 +23,7 @@ process.stdout.write('[34m:[34m:[34m:[34m:[34m:[34m;[36mt[37mX[97m#[97
     '[96mX[37mX[94mY[36mt[94mY[94mV[37mR[37mR[37mR[37mR[37mR[37mV[37mV[37mX[37mR[37mR[96mX[94mY[36m+[36m+[94mY[96mX[96mX[94mI[34m+[34m=[34m=[36m+[36m+[36mt[90mY[37mY[90mI[34m=[34m=[34m=[34m=[34m;[34m;[34m=[34m=[34m=[34m=[34m=[34m=[34m=[34m;[34m:[34m:[90mt[37mX[90mI[36mi[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[36mi[90mY[90mI[94mi[94mt[94mI[94mY[94mI[94mI[94mI[94mI[94mI[94mI[94mI[94mI[96mY[94mI[94mI[94mI[0m\n' +
     `Savior of Song Keychip v${application_version}\nby Kazari\n\n`);
 
+process.title = `Savior of Song Keychip v${application_version}`;
 const fs = require('fs');
 const {SerialPort, ReadlineParser} = require('serialport');
 const yargs = require('yargs/yargs')
@@ -85,7 +86,7 @@ const cliArgs = yargs(hideBin(process.argv))
 
     .option('applicationExec', {
         type: 'string',
-        description: 'File to execute (must be in X:\\)\nDefault order:\nX:\\game.ps1\nX:\\bin\\game.bat'
+        description: 'File to execute (must be in X:\\)\nDefault order:\n1. X:\\<applicationExec>\n2. X:\\game.ps1\n3. X:\\bin\\game.bat'
     })
     .option('prepareScript', {
         alias: 'p',
@@ -98,9 +99,13 @@ const cliArgs = yargs(hideBin(process.argv))
         description: 'PS1 Script to execute when shutting down'
     })
 
-    .option('updateMode', {
+    .option('update', {
         type: 'bool',
-        description: 'Mount as ReadWrite Mode and Detach Keychip'
+        description: 'Mount Application with write access and run update script (must be in X:\\)\nDefault Order:\n1. X:\\update.ps1 (Load Option Pack)\n2. X:\\download.ps1 (Online Update)\n3. X:\\bin\\update.bat'
+    })
+    .option('editMode', {
+        type: 'bool',
+        description: 'Mount as ReadWrite Mode and Detach Keychip to modify application files'
     })
     .option('shutdown', {
         type: 'bool',
@@ -129,7 +134,7 @@ const sdbar = new cliProgress.SingleBar({
     barIncompleteChar: '\u2591',
     hideCursor: true
 });
-subar.start(25, 0, {
+subar.start(35, 0, {
     stage: "Initialization"
 });
 
@@ -251,7 +256,7 @@ async function startCheckIn() {
                 const prepareCmd = await prepareDisk({
                     disk: options.applicationVHD,
                     mountPoint: 'X:\\',
-                    writeAccess: !!(cliArgs.updateMode || cliArgs.encryptSetup)
+                    writeAccess: !!(cliArgs.update || cliArgs.editMode || cliArgs.encryptSetup)
                 });
                 if (!prepareCmd) {
                     subar.stop();
@@ -270,7 +275,7 @@ async function startCheckIn() {
                 const prepareCmd = await prepareDisk({
                     disk: options.optionVHD,
                     mountPoint: 'Z:\\',
-                    writeAccess: !!(cliArgs.updateMode || cliArgs.encryptSetup)
+                    writeAccess: !!(cliArgs.update || cliArgs.editMode || cliArgs.encryptSetup)
                 });
                 if (!prepareCmd) {
                     subar.stop();
@@ -304,7 +309,7 @@ async function startCheckIn() {
         if (options.verbose) {
             console.log(`Disk Setup Complete`);
         }
-        subar.update(15, {
+        subar.update(25, {
             stage: (cliArgs.encryptSetup) ? "Encrypt Application" :"Authorize Application"
         });
 
@@ -353,7 +358,7 @@ async function startCheckIn() {
         }
         if (options.verbose)
             console.log(`Unlock Done`);
-        subar.update(24);
+        subar.update(34);
         sendMessage('11');
     } else {
         // Nothing to do, Check-Out Crypto
@@ -364,37 +369,52 @@ async function startCheckIn() {
     }
 }
 async function postCheckIn() {
-    if (!(cliArgs.updateMode || cliArgs.shutdown || cliArgs.encryptSetup)) {
-        if (options.verbose) {
-            console.log(`Launch App`);
-        }
-        subar.update(25, {
-            stage: "Launch Application"
-        });
-        await sleep(100);
-        subar.stop();
-        if (options.applicationExec) {
-            if (fs.existsSync(resolve(`X:/${options.applicationExec}`))) {
-                process.stdout.write("\n");
-                await runAppScript(`X:/${options.applicationExec}`, options.applicationExec.endsWith('.bat'));
-            }
-        } else if (fs.existsSync(resolve(`X:/game.ps1`))) {
-            process.stdout.write("\n");
-            await runAppScript(`X:/game.ps1`);
-        } else if (fs.existsSync(resolve(`X:/bin/game.bat`))) {
-            process.stdout.write("\n");
-            await runAppScript(`X:/bin/game.bat`, true);
-        } else {
-            process.stdout.write("\nNo application was found!\n\n");
-        }
-        process.stdout.write("\n");
-        await runCheckOut();
-    } else if (cliArgs.updateMode || cliArgs.encryptSetup) {
-        subar.update(25, {
+    if (cliArgs.editMode || cliArgs.encryptSetup) {
+        subar.update(35, {
             stage: "Detach Keychip"
         });
         clearTimeout(watchdog);
         sendMessage("2");
+    } else if (!cliArgs.shutdown) {
+        if (options.verbose) {
+            console.log(`Launch App`);
+        }
+        subar.update(35, {
+            stage: (cliArgs.update) ? "Update Application" : "Launch Application"
+        });
+        await sleep(100);
+        subar.stop();
+        if (cliArgs.update) {
+            if (fs.existsSync(resolve(`X:/update.ps1`))) {
+                process.stdout.write("\n");
+                await runAppScript(`X:/update.ps1`);
+            } else if (fs.existsSync(resolve(`X:/download.ps1`))) {
+                process.stdout.write("\n");
+                await runAppScript(`X:/download.ps1`);
+            } else if (fs.existsSync(resolve(`X:/bin/update.bat`))) {
+                process.stdout.write("\n");
+                await runAppScript(`X:/bin/update.bat`, true);
+            } else {
+                process.stdout.write("\nNo update script was found!\n\n");
+            }
+        } else {
+            if (options.applicationExec) {
+                if (fs.existsSync(resolve(`X:/${options.applicationExec}`))) {
+                    process.stdout.write("\n");
+                    await runAppScript(`X:/${options.applicationExec}`, options.applicationExec.endsWith('.bat'));
+                }
+            } else if (fs.existsSync(resolve(`X:/game.ps1`))) {
+                process.stdout.write("\n");
+                await runAppScript(`X:/game.ps1`);
+            } else if (fs.existsSync(resolve(`X:/bin/game.bat`))) {
+                process.stdout.write("\n");
+                await runAppScript(`X:/bin/game.bat`, true);
+            } else {
+                process.stdout.write("\nNo application was found!\n\n");
+            }
+        }
+        process.stdout.write("\n");
+        await runCheckOut();
     }
 }
 async function runCheckOut() {
@@ -552,6 +572,7 @@ async function unlockDisk(o) {
     }
     const unlockCmd = await runCommand(`Unlock-BitLocker -MountPoint "${o.mountPoint}" -Password $(ConvertTo-SecureString -String "${returned_key}" -AsPlainText -Force) -Confirm:$false -ErrorAction Stop`);
     returned_key = null;
+    await sleep(1000);
     return (unlockCmd);
 }
 async function encryptDisk(o) {
@@ -575,6 +596,7 @@ async function encryptDisk(o) {
     }
     const unlockCmd = await runCommand(`Enable-BitLocker -MountPoint "${o.mountPoint}" -EncryptionMethod XtsAes256 -UsedSpaceOnly -SkipHardwareTest -PasswordProtector -Password $(ConvertTo-SecureString -String "${returned_key}" -AsPlainText -Force) -Confirm:$false -ErrorAction Stop`);
     returned_key = null;
+    await sleep(1000);
     return (unlockCmd);
 }
 
@@ -653,7 +675,7 @@ function parseIncomingMessage(receivedData) {
         } else {
             console.error(`\nHardware Failure ${receivedData.replace("KEYCHIP_FAILURE_", "")}`);
         }
-    } else if (receivedData === 'SG_HELLO' && (applicationArmed !== false && !(cliArgs.updateMode && cliArgs.shutdown && cliArgs.encryptMode))) {
+    } else if (receivedData === 'SG_HELLO' && (applicationArmed !== false && !(cliArgs.editMode && cliArgs.shutdown && cliArgs.encryptMode))) {
         lastCheckIn = new Date().valueOf();
         clearTimeout(dropOutTimer);
         dropOutTimer = setTimeout(() => {
@@ -672,6 +694,9 @@ function parseIncomingMessage(receivedData) {
         }
         subar.increment();
         if (cliArgs.shutdown) {
+            subar.update(35, {
+                stage: "Shutdown Request",
+            });
             runCheckOut();
         } else {
             port.write('@5!');
@@ -798,5 +823,5 @@ port.on('open', async () => {
     sendMessage('?');
     watchdog = setInterval(() => {
         sendMessage('?');
-    }, ((!(cliArgs.updateMode && cliArgs.shutdown && cliArgs.encryptMode)) ? 1000 : 2000));
+    }, ((!(cliArgs.editMode && cliArgs.shutdown && cliArgs.encryptMode)) ? 1000 : 2000));
 });
