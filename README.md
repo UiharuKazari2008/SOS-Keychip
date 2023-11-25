@@ -114,6 +114,7 @@ const char* ininCommunicationIV[numOfKeys] = { "INITAL_128_IV_KEY" };
 ```
 7. Run the Keychip bootstrap<br>
 **RUN AS ADMINISTRATOR**
+  * If you have issues with your application not working as expected, add `--forkExec` to fork the runtime
   * Keychip should be on `COM5` or use `--port COM#` to change
 ```powershell
 & ./savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd

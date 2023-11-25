@@ -723,11 +723,13 @@ function parseIncomingMessage(receivedData) {
     } else if (receivedData === 'SG_HELLO' && (applicationArmed !== false && !(cliArgs.editMode && cliArgs.shutdown && cliArgs.encryptMode))) {
         lastCheckIn = new Date().valueOf();
         clearTimeout(dropOutTimer);
-        dropOutTimer = setTimeout(() => {
+        dropOutTimer = setTimeout(async () => {
             if (options.verbose) {
                 console.error(`Keychip Checkin Failed`);
             }
             if (applicationArmed !== false) {
+                if (cliArgs.forkExec)
+                    await runCommand('Stop-ScheduledTask -TaskName "TEMP_SOS_APP" -ErrorAction SilentlyContinue');
                 applicationArmed.kill("SIGINT");
             } else {
                 ps.dispose().then(r => process.exit(1));
@@ -797,6 +799,8 @@ port.on('error', async (err) => {
     if (options.verbose) {
         console.error(`Keychip Communication Error`, err);
     } else if (applicationArmed) {
+        if (cliArgs.forkExec)
+            await runCommand('Stop-ScheduledTask -TaskName "TEMP_SOS_APP" -ErrorAction SilentlyContinue');
         applicationArmed.kill("SIGINT");
     } else {
         if (err.message.includes("File not found")) {
@@ -811,11 +815,13 @@ port.on('error', async (err) => {
     if (!applicationArmed)
         ps.dispose().then(r => process.exit(10));
 });
-port.on('close', (err) => {
+port.on('close', async (err) => {
     if (options.verbose) {
         console.error(`Keychip Communication Closed`, err);
     } else if (applicationArmed) {
         console.error(`\nKeychip Removal\n`);
+        if (cliArgs.forkExec)
+            await runCommand('Stop-ScheduledTask -TaskName "TEMP_SOS_APP" -ErrorAction SilentlyContinue');
         applicationArmed.kill("SIGINT");
     } else {
         if (err.message.includes("File not found")) {
