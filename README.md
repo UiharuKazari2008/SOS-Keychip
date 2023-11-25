@@ -12,6 +12,7 @@ This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is
 * Add documention on how to pack inital application installation 7z file for easy distribution
 * Segatools.ini keychip updates or direct integration to amdeamon
 * Support to auto-relaunch application on death
+* Board layout for custom keychip PCB with Infinion Private Key Store and Encryption Accelerator
 
 ## Use Cases
 * Protection of a game/application where you are distributing images that should only be used by someone that has a physical keychip
