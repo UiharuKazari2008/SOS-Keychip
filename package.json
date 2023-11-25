@@ -18,7 +18,8 @@
     ],
     "output": "savior_of_song_keychip",
     "assets": [
-      "node_modules/@serialport/binding*/**/*"
+      "node_modules/@serialport/binding*/**/*",
+      "JOB_SOS_APP.xml"
     ],
     "targets": [
       "node18-win-x64"

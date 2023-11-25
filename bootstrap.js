@@ -1,4 +1,4 @@
-const application_version = 2.12;
+const application_version = 2.15;
 const expected_crypto_version = 2;
 const min_firmware_version = 2.3;
 process.stdout.write('[34m:[34m:[34m:[34m:[34m:[34m;[36mt[37mX[97m#[97mW[97m#[97m#[97m#[97m#[97mW[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97mW[97mW[97m#[97m#[97m#[37mB[37mV[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[94m=[34m;[34m:[34m;[94mi[36mt[37mB[37mB[97mW[37mB[37mX[37mV[36mI[90mI[37mV[37mB[37mM[97mW[37mM[37mX[94mY[94mI[94mt[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[34m+[94mI[94mI[34m+[34m=[0m\n' +
@@ -21,9 +21,8 @@ process.stdout.write('[34m:[34m:[34m:[34m:[34m:[34m;[36mt[37mX[97m#[97
     '[37mB[37mB[37mB[37mR[37mR[37mV[37mY[94mY[94mY[94mY[37mX[37mR[37mR[37mR[37mR[37mX[37mR[37mR[37mR[37mV[37mY[37mV[37mR[37mR[37mX[94mI[90mY[37mX[36mi[34m+[34m+[90mt[90mI[34m+[34m;[34m=[34m=[34m=[34m=[34m=[34m;[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[34m+[36mt[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m=[36mI[36mt[36mt[90mI[90mY[90mY[90mI[90mI[94mY[94mI[94mI[94mV[94mY[94mY[94mY[96mV[94mI[96mY[96mY[0m\n' +
     '[94mY[37mX[37mX[96mX[94mV[94mY[94mY[94mV[37mX[37mR[37mR[37mR[37mR[37mX[37mX[37mR[37mR[96mR[94mY[94mY[94mY[94mV[96mR[37mX[94mI[36m+[34m=[34m=[34m+[36mi[36mt[90mI[37mY[35mi[34m=[34m;[34m;[34m;[34m=[34m=[34m=[34m=[34m=[34m=[34m=[34m;[34m:[34m:[34m:[34m:[34m=[90mI[36m+[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[36mi[37mY[37mX[37mV[37mV[37mV[90mY[90mY[94mI[94mI[94mI[94mY[94mI[94mt[94mt[96mY[94mI[94mI[94mI[0m\n' +
     '[96mX[37mX[94mY[36mt[94mY[94mV[37mR[37mR[37mR[37mR[37mR[37mV[37mV[37mX[37mR[37mR[96mX[94mY[36m+[36m+[94mY[96mX[96mX[94mI[34m+[34m=[34m=[36m+[36m+[36mt[90mY[37mY[90mI[34m=[34m=[34m=[34m=[34m;[34m;[34m=[34m=[34m=[34m=[34m=[34m=[34m=[34m;[34m:[34m:[90mt[37mX[90mI[36mi[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[36mi[90mY[90mI[94mi[94mt[94mI[94mY[94mI[94mI[94mI[94mI[94mI[94mI[94mI[94mI[96mY[94mI[94mI[94mI[0m\n' +
-    `Savior of Song Keychip v${application_version}\nby Kazari\n\n`);
+    `\x1b[36mSavior of Song Keychip\x1b[0m \x1b[31mv${application_version}\x1b[0m\nby \x1b[35mKazari\x1b[0m\n\n`);
 
-process.title = `Savior of Song Keychip v${application_version}`;
 const fs = require('fs');
 const {SerialPort, ReadlineParser} = require('serialport');
 const yargs = require('yargs/yargs')
@@ -35,6 +34,7 @@ const crypto = require('crypto-js');
 const sleep = (waitTimeInMs) => new Promise(resolve => setTimeout(resolve, waitTimeInMs));
 const cliProgress = require('cli-progress');
 const colors = require('ansi-colors');
+const {release, tmpdir} = require("os");
 
 let options = {};
 let secureOptions = {};
@@ -84,6 +84,10 @@ const cliArgs = yargs(hideBin(process.argv))
         description: 'Environment Configuration File (Secured File)'
     })
 
+    .option('forkExec', {
+        type: 'bool',
+        description: 'Fork the application as another child process in the event that the application is malfunctioning being launched the normal way'
+    })
     .option('applicationExec', {
         type: 'string',
         description: 'File to execute (must be in X:\\)\nDefault order:\n1. X:\\<applicationExec>\n2. X:\\game.ps1\n3. X:\\bin\\game.bat\n4.X:\\bin\\start.bat'
@@ -207,6 +211,11 @@ if (options.loginKey && options.loginIV) {
 if (options.verbose)
     console.log(options);
 
+
+setInterval(() => {
+    process.title = `ARS NOVA I-401 Keychip [${options.applicationID}]`;
+}, 100);
+
 const port = new SerialPort({path: options.port, baudRate: 4800});
 const parser = port.pipe(new ReadlineParser({delimiter: '\n'}));
 subar.increment();
@@ -227,7 +236,7 @@ async function startCheckIn() {
         if (options.verbose) {
             console.error(`Firmware "${keychip_version[0]}" is outdated, please flash the latest version!`);
         } else {
-            console.error('\nKeychip Firmware Outdated');
+            console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Firmware Outdated\x1b[0m');
         }
         sendMessage('0');
         ps.dispose().then(r => process.exit(102));
@@ -242,7 +251,7 @@ async function startCheckIn() {
             console.error(`Once decrypted, you can update the bootstrap and firmware and run --encryptSetup`);
             console.error(`###################################################################################`);
         } else {
-            console.error('\nKeychip Crypto Mismatch');
+            console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Crypto Incompatible\x1b[0m');
         }
         sendMessage('0');
         ps.dispose().then(r => process.exit(102));
@@ -260,7 +269,7 @@ async function startCheckIn() {
                 });
                 if (!prepareCmd) {
                     subar.stop();
-                    console.error('\nFailed to Prepare Disk');
+                    console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Prepare Disk\x1b[0m');
                     await ps.dispose().then(r => process.exit(102));
                 } else {
                     subar.increment();
@@ -279,12 +288,12 @@ async function startCheckIn() {
                 });
                 if (!prepareCmd) {
                     subar.stop();
-                    console.error('\nFailed to Prepare Disk');
+                    console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Prepare Disk\x1b[0m');
                     await ps.dispose().then(r => process.exit(102));
                 }
             } else {
                 subar.stop();
-                console.error('\nFailed to Locate Disk');
+                console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Locate Disk\x1b[0m');
                 ps.dispose().then(r => process.exit(101));
             }
         }
@@ -297,12 +306,12 @@ async function startCheckIn() {
                 });
                 if (!prepareCmd) {
                     subar.stop();
-                    console.error('\nFailed to Prepare Disk');
+                    console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Prepare Disk\x1b[0m');
                     await ps.dispose().then(r => process.exit(102));
                 }
             } else {
                 subar.stop();
-                console.error('\nFailed to Locate Disk');
+                console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Locate Disk\x1b[0m');
                 ps.dispose().then(r => process.exit(101));
             }
         }
@@ -318,7 +327,7 @@ async function startCheckIn() {
                 const encryptCmd = await encryptDisk({diskNumber: 0, mountPoint: 'X:\\',});
                 if (!encryptCmd) {
                     subar.stop();
-                    console.error('\nFailed to Encrypt Disk');
+                    console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Encrypt Disk\x1b[0m');
                     ps.dispose().then(r => process.exit(99));
                 } else {
                     subar.increment();
@@ -328,7 +337,7 @@ async function startCheckIn() {
                 const encryptCmd = await encryptDisk({diskNumber: 1, mountPoint: 'Z:\\',});
                 if (!encryptCmd) {
                     subar.stop();
-                    console.error('\nFailed to Encrypt Disk');
+                    console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Encrypt Disk\x1b[0m');
                     ps.dispose().then(r => process.exit(99));
                 } else {
                     subar.increment();
@@ -339,7 +348,7 @@ async function startCheckIn() {
                 const unlockCmd = await unlockDisk({diskNumber: 0, mountPoint: 'X:\\',});
                 if (!unlockCmd) {
                     subar.stop();
-                    console.error('\nFailed to Unlock Disk');
+                    console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Unlock Disk\x1b[0m');
                     ps.dispose().then(r => process.exit(103));
                 } else {
                     subar.increment();
@@ -349,7 +358,7 @@ async function startCheckIn() {
                 const unlockCmd = await unlockDisk({diskNumber: 1, mountPoint: 'Z:\\',});
                 if (!unlockCmd) {
                     subar.stop();
-                    console.error('\nFailed to Unlock Disk');
+                    console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Unlock Disk\x1b[0m');
                     ps.dispose().then(r => process.exit(103));
                 } else {
                     subar.increment();
@@ -386,34 +395,27 @@ async function postCheckIn() {
         subar.stop();
         if (cliArgs.update) {
             if (fs.existsSync(resolve(`X:/update.ps1`))) {
-                process.stdout.write("\n");
                 await runAppScript(`X:/update.ps1`);
             } else if (fs.existsSync(resolve(`X:/download.ps1`))) {
-                process.stdout.write("\n");
                 await runAppScript(`X:/download.ps1`);
             } else if (fs.existsSync(resolve(`X:/bin/update.bat`))) {
-                process.stdout.write("\n");
                 await runAppScript(`X:/bin/update.bat`, true);
             } else {
-                process.stdout.write("\nNo update script was found!\n\n");
+                console.error('\n\n\x1b[5m\x1b[41m\x1b[30mNo Update Application was found\x1b[0m\n');
             }
         } else {
             if (options.applicationExec) {
                 if (fs.existsSync(resolve(`X:/${options.applicationExec}`))) {
-                    process.stdout.write("\n");
                     await runAppScript(`X:/${options.applicationExec}`, options.applicationExec.endsWith('.bat'));
                 }
             } else if (fs.existsSync(resolve(`X:/game.ps1`))) {
-                process.stdout.write("\n");
                 await runAppScript(`X:/game.ps1`);
             } else if (fs.existsSync(resolve(`X:/bin/game.bat`))) {
-                process.stdout.write("\n");
                 await runAppScript(`X:/bin/game.bat`, true);
             } else if (fs.existsSync(resolve(`X:/bin/start.bat`))) {
-                process.stdout.write("\n");
                 await runAppScript(`X:/bin/start.bat`, true);
             } else {
-                process.stdout.write("\nNo application was found!\n\n");
+                console.error('\n\n\x1b[5m\x1b[41m\x1b[30mNo Application was found\x1b[0m\n');
             }
         }
         process.stdout.write("\n");
@@ -510,18 +512,58 @@ async function runCommand(input, suppressOutput = false) {
         }
     });
 }
+async function createTask(exec, is_bat, workingDir, suppressOutput = false) {
+    return new Promise(async ok => {
+        try {
+            fs.copyFileSync(join(__dirname , 'JOB_SOS_APP.xml'), join(tmpdir(), 'job.xml'));
+            const printCommand = PowerShell.command([
+                `Unregister-ScheduledTask -TaskName "TEMP_SOS_APP" -Confirm:$false -ErrorAction SilentlyContinue; `,
+                `Register-ScheduledTask -TaskName TEMP_SOS_APP -Xml (Get-Content -Raw -Path "${resolve(join(tmpdir(), 'job.xml'))}") -ErrorAction Stop; `,
+                `Set-ScheduledTask -TaskName 'TEMP_SOS_APP' -Action (New-ScheduledTaskAction -Execute '${(is_bat) ? 'cmd.exe' : 'powershell.exe'}' -Argument '${(is_bat) ? '/c' : '-NoProfile -ExecutionPolicy Bypass -File'} "${exec}"' -WorkingDirectory "${workingDir}")`,
+            ]);
+            const result = await ps.invoke(printCommand);
+            if (options.verbose && (!suppressOutput || result.hadErrors)) {
+                console.log(result.raw);
+            }
+            fs.unlinkSync(join(tmpdir(), 'job.xml'));
+            ok(result);
+        } catch (error) {
+            if (options.verbose) {
+                console.error(error);
+            }
+            fs.unlinkSync(join(tmpdir(), 'job.xml'));
+            ok(false);
+        }
+    });
+}
 async function runAppScript(input, is_bat) {
-    return new Promise((ok) => {
-        applicationArmed = spawn(((is_bat) ? 'cmd.exe' : 'powershell.exe'), ((is_bat) ? ['/c', input] : ['-File', input, '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true']), {
+    return new Promise(async (ok) => {
+        let args = ["-Command"];
+        if (cliArgs.forkExec) {
+            await createTask(input, is_bat, process.cwd());
+            args.push(`Start-ScheduledTask -TaskName "TEMP_SOS_APP"; While ((Get-ScheduledTask -TaskName "TEMP_SOS_APP").State -eq "Running") { Sleep -Seconds 1 }`)
+        } else if (is_bat) {
+            args.push(`Start-Process -Wait -FilePath runas -ArgumentList '${(parseInt(release().split('.').pop()) >= 22000) ? '/machine:amd64' : ''} /trustlevel:0x20000 "cmd.exe /c ${input}"'`)
+        } else {
+            args.push(`Start-Process -Wait -FilePath runas -ArgumentList '${(parseInt((release()).split('.').pop()) >= 22000) ? '/machine:amd64' : ''} /trustlevel:0x20000 "powershell.exe -File ${input} -NoProfile:$true"'`)
+        }
+        console.error('\n\x1b[42m\x1b[30mApplication Running\x1b[0m\n');
+        applicationArmed = spawn("powershell.exe", args, {
             stdio: 'inherit' // Inherit the standard IO of the Node.js process
         });
-        applicationArmed.on('exit', function () {
+        applicationArmed.on('exit', async function () {
+            if (cliArgs.forkExec)
+                await runCommand('Unregister-ScheduledTask -TaskName "TEMP_SOS_APP" -Confirm:$false -ErrorAction SilentlyContinue');
             ok()
         })
-        applicationArmed.on('close', function () {
+        applicationArmed.on('close', async function () {
+            if (cliArgs.forkExec)
+                await runCommand('Unregister-ScheduledTask -TaskName "TEMP_SOS_APP" -Confirm:$false -ErrorAction SilentlyContinue');
             ok()
         })
-        applicationArmed.on('end', function () {
+        applicationArmed.on('end', async function () {
+            if (cliArgs.forkExec)
+                await runCommand('Unregister-ScheduledTask -TaskName "TEMP_SOS_APP" -Confirm:$false -ErrorAction SilentlyContinue');
             ok()
         })
     })
@@ -751,7 +793,7 @@ parser.on('data', (data) => {
         parseIncomingMessage(receivedData);
     }
 });
-port.on('error', (err) => {
+port.on('error', async (err) => {
     if (options.verbose) {
         console.error(`Keychip Communication Error`, err);
     } else if (applicationArmed) {
@@ -759,10 +801,11 @@ port.on('error', (err) => {
     } else {
         if (err.message.includes("File not found")) {
             subar.stop();
-            console.error('\nKeychip not found');
+            console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip not found\x1b[0m');
+            await sleep(5000)
         } else {
             subar.stop();
-            console.error('\nKeychip Hardware Failure');
+            console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Hardware Failure\x1b[0m');
         }
     }
     if (!applicationArmed)
@@ -777,10 +820,10 @@ port.on('close', (err) => {
     } else {
         if (err.message.includes("File not found")) {
             subar.stop();
-            console.error('\nKeychip not found');
+            console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Removal\x1b[0m');
         } else {
             subar.stop();
-            console.error('\nKeychip Hardware Failure');
+            console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Hardware Failure\x1b[0m');
         }
     }
     if (!applicationArmed)
@@ -789,7 +832,7 @@ port.on('close', (err) => {
 
 // Handle the opening of the serial port
 port.on('open', async () => {
-    await runCommand('Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Confirm:$false -ErrorAction SilentlyContinue', true);
+    await runCommand('Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Confirm:$false -ErrorAction SilentlyContinue | Out-Null', true);
     subar.increment();
     if (options.prepareScript) {
         if (options.verbose) {
