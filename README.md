@@ -153,27 +153,7 @@ The keychip is designed to handle requests in a very specific order and if any c
 
 ## Command Line Options
 ```powershell
-:::::;tX#W####W########WW###BV=::::::::::;=;:;itBBWBXVIIVBMWMXYIt=::::::::;+II+=
-::::;tR#MW###WWM####MW#WWWMW#BV+;::::::::;+=;=+IRMWRVVRBMWMXYi=;;:::::::::::++t=
-:::;IB##M####WBW###MWMBWWMBBMWBYi;:::=ii+=;;===IRWWRBWWWMRYi;::::;::;;;;::::=:;;
-::;IRW########XMW##BBBVRWWBBRXBMRYtitt;;i;:;=iiIX#MRWWBXYi=;;=+itIYYVVVVVYIti=;:
-::+VB##W##M#WWRRMXRXYRYVRMWMRXRXBMMRVYItIi+tYXBVR#BXBXYtiiIYVVXRRRRRRRRRRRRRXVYi
-::+XMWWM#WXWWBXBRVVYi+IVXRM#WRRRRXXRMMMMWWWWW#MXMWRXYYVVXRRRRRRRRRRRRRRRRRRRRXXX
-::;YMXBYRXYYVYVM##WBXtXYMBRMW#BRRXVVVXXXRRBBRRXMWBXRRRRRXXXXXXVVVYItttttIVXRRRVY
-=;:=IVIYVVYttiM######WRW##BVMWWWRiitBBBRXXRRRRMWMXXXVVVVXXXRRRRXVVIi=::,:;+tYXRX
-;i:::;=iVVVVXXX###########BXXXMWWWBXBBBBMBRBMWMXItiitttttIIYVXXRRRRXVI+;;;;=i+IV
-=i++=;;;=IXVXB###########BBBB++IXMMWWWWWWWWWMVit=::::::::::;=+tVXRRRRRXYi===i:;i
-;::i:,,,,:iVXVXMMW#WW##MRBBBBt;;;=IYBBBMWWWMBt+titi+==;::,,,,::;+YXRRRRRVI==i;==
-+=+=::::::;=YXXXXXXIIYtiRMRYii;;;tt=VBBRIBWMRRBMBRXVYIIi=::::::::=tVRRRRRXItItII
-;i;:::::::;;tMBRRXXVIi+++tIIIi+++V=+tRMMWWWMMMMMBBBBBBRXYt=::::::;;tVRRRRRXIYttt
-;+:,,,,,,,:+VWBXXRRBRRXVVYYVVYYYXXRMWWWMMRXVXVVYVVXRRRRXXVY+;;===+++IXRRRVRYIIII
-;:,,,,,::=iXWBXXRRRRRRBMWWWWWWWWWWWMMMRYi+=;+itttiiitYVXXIiIt;:::+++IVRRRVYYYItI
-,,,,:;=iYRMMXVVXRRRRVRXXXIYYYYYYIRMBRY===+ittti=;;=;;=+itYIIt++++iiiIVVVRXIYYIIY
-iitYXRMMBRVYVRRXRRRXXXXRRXRWXitIt+i++;:::::::;=iti;::==;;+tit+=;=iitIYYIXXtYVIYY
-BBBRRVYYYYXRRRRXRRRVYVRRXIYXi++tI+;=====;:::::::;+t=::::::::=IttIYYIIYIIVYYYVIYY
-YXXXVYYVXRRRRXXRRRYYYVRXI+==+itIYi=;;;=======;::::=I+::::::::iYXVVVYYIIIYIttYIII
-XXYtYVRRRRRVVXRRXY++YXXI+==++tYYI====;;=======;::tXIi=:::::::iYIitIYIIIIIIIIYIII
-Savior of Song Keychip v2.10
+Savior of Song Keychip vX.XX
 by Kazari
 
 Options:
@@ -186,18 +166,22 @@ Options:
   -z, --optionVHD        Options Disk Image (Z:\)                       [string]
   -e, --env              Environment Configuration File                 [string]
   -s, --secureEnv        Environment Configuration File (Secured File)  [string]
+      --forkExec         Fork the application as another child process in the
+                         event that the application is malfunctioning being
+                         launched the normal way
       --applicationExec  File to execute (must be in X:\)
                          Default order:
                          1. X:\<applicationExec>
                          2. X:\game.ps1
-                         3. X:\bin\game.bat                             [string]
+                         3. X:\bin\game.bat
+                         4. X:\bin\start.bat                            [string]
   -p, --prepareScript    PS1 Script to execute to prepare host          [string]
   -q, --cleanupScript    PS1 Script to execute when shutting down       [string]
       --update           Mount Application with write access and run update
                          script (must be in X:\)
                          Default Order:
                          1. X:\update.ps1 (Load Option Pack)
-                         2. X:\download.ps1 (SOS Download Order Update Script)
+                         2. X:\download.ps1 (Online Update)
                          3. X:\bin\update.bat
       --editMode         Mount as ReadWrite Mode and Detach Keychip to modify
                          application files

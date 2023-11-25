@@ -90,7 +90,7 @@ const cliArgs = yargs(hideBin(process.argv))
     })
     .option('applicationExec', {
         type: 'string',
-        description: 'File to execute (must be in X:\\)\nDefault order:\n1. X:\\<applicationExec>\n2. X:\\game.ps1\n3. X:\\bin\\game.bat\n4.X:\\bin\\start.bat'
+        description: 'File to execute (must be in X:\\)\nDefault order:\n1. X:\\<applicationExec>\n2. X:\\game.ps1\n3. X:\\bin\\game.bat\n4. X:\\bin\\start.bat'
     })
     .option('prepareScript', {
         alias: 'p',
