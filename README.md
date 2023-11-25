@@ -134,7 +134,7 @@ If you are not restarting/powering off your hardware after the game, you must ch
 
 ## I need help and its not worth a Issue
 For the love of god please don't post actually game keys in Issues, thanks<br/>
-You can message me on discord `@vorekazari`<br/>
+You can message me on discord (NOT FRIEND FREQUEST, MESSAGE REQUEST) `@vorekazari` or you know who I am in Missless<br/>
 ![image](https://github.com/UiharuKazari2008/SOS-Keychip/assets/15165770/f9ba98ae-7b46-454d-a1a5-c97c9a8813e9)
 
 ## Error Codes
