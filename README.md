@@ -132,6 +132,11 @@ If you are not restarting/powering off your hardware after the game, you must ch
 & ./savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
 ```
 
+## I need help and its not worth a Issue
+For the love of god please don't post actually game keys in Issues, thanks<br/>
+You can message me on discord `@vorekazari`<br/>
+![image](https://github.com/UiharuKazari2008/SOS-Keychip/assets/15165770/f9ba98ae-7b46-454d-a1a5-c97c9a8813e9)
+
 ## Error Codes
 The keychip is designed to handle requests in a very specific order and if any command is ran that is not at the correct stage the device will lock and require a power cycle.
 * 0001 - Application does not match keychip's known store (Unlock Disk)
