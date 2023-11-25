@@ -4,24 +4,26 @@
 Keychip emulator that handles game disk encryption and application lifecycle management for arcade cabinet or other applications
 
 ## Important Note!
-This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is designed to work with a sudo-ALLS setup where sgpreboot does not exist and is specically designed to recreate the hardware key requirement to use the game. This is not designed to be high security and can be intercepted without much work.
+This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is designed to work with a sudo-ALLS setup where sgpreboot does not exist. It is designed to recreate the hardware key requirement to use the game and protect data in transit and from offline ripping. This is not designed to be super high security.
 
 ## ToDo
+* Option to not run application as administration due to weird issues (Diva......)
 * Add special update password keystore for decrypting update files
+* Add documention on how to pack inital application installation 7z file for easy distribution
 * Segatools.ini keychip updates or direct integration to amdeamon
 * Support to auto-relaunch application on death
 
 ## Use Cases
 * Protection of a game/application where you are distributing images that should only be used by someone that has a physical keychip
 * Protection of a game/application when the host in transport
-* Prevention of offline data scraping
+* Prevention of offline data ripping
 
 ## Hardware
 **More than 2KB of RAM IS REQUIRED**<br/>
 Waveshare RP2040-GEEK<br>
 <img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/IMG_5948.jpg"/><br>
 or any generic RP2040/Arduino<br/>
-**The SHA256 Implementation between the Arduino and other hardware may not be cross-compatible! Pick one hardware standard and stick with it**
+**The SHA256 Implementation between the Arduino and other hardware ***may not*** be cross-compatible! Pick one hardware standard and stick with it for your own sanity**
 
 ## CMAK (Required in 2.0+)
 CMAK (Cycling Message Authentication Key) is designed to prevent tampering and readability of messages to/from the keychip and system. Any and all serial messages that are sent in LV1 mode are encrypted using a key that was attached to the previous message and so on. The only way to decrypt the chain is to have access to the inital communication key that is set on the host.
@@ -71,7 +73,7 @@ const char* ininCommunicationIV[numOfKeys] = { "INITAL_128_IV_KEY" };
 * To use multiple keys for multiple games increase the `numOfKeys` and add them to the arrays
 2. Create CMAK authentication string
     * Authentication String should be a [base64 encoded string](https://www.bing.com/search?q=base64+encode) like bellow with each value separated by spaces
-    * `GAMEID INITAL_128_AES_KEY INITAL_128_IV_KEY`
+    * `GAMEID INITAL_128_AES_KEY INITAL_128_IV_KEY` => BASE64
     * If you are using mutiple keys/games you must use a seperate authentication key for each
 3. Launch Arduino IDE and flash the firmware
   * Install the following libraries with the library manager
