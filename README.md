@@ -76,6 +76,8 @@ const char* ininCommunicationIV[numOfKeys] = { "INITAL_128_IV_KEY" };
 3. Launch Arduino IDE and flash the firmware
   * Install the following libraries with the library manager
     * ArduinoBearSSL
+    * AESLib
+    * base64_encode
     * Adafruit_ST7789 (ONLY If your using the ST7789 version)
   * Version Explanation
     * ST7789 - Waveshare RP2040-GEEK
