@@ -23,6 +23,9 @@ Waveshare RP2040-GEEK<br>
 or any generic RP2040/Arduino<br/>
 **The SHA256 Implementation between the Arduino and other hardware may not be cross-compatible! Pick one hardware standard and stick with it**
 
+## CMAK (Required in 2.0+)
+CMAK (Cycling Message Authentication Key) is designed to prevent tampering and readability of messages to/from the keychip and system. Any and all serial messages that are sent in LV1 mode are encrypted using a key that was attached to the previous message and so on. The only way to decrypt the chain is to have access to the inital communication key that is set on the host.
+
 ## Keychip Lifecycle
 In order of operation
 1. Client opens serial port
