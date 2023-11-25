@@ -9,12 +9,7 @@
 #include "AESLib.h"
 #include "arduino_base64.hpp"
 #include "device_key.h"
-// device_key.h file should look like this
-// const char* keychipText = "SDFE XX XX"; // Should be GAME_ID VER REGION
-// const char* keychipID = "XXXX-XXXXXXXXXXX"; // Keychip ID that will be sent to segatools
-// const char* applicationID = "SDFE";
-// const char* applicationKey = "SOME_CRYPTO_KEY"; // Refer to "the list of keys" or make your own does not matter
-// const char* applicationIV = "EXPECTED_CHECK_CODE" // Same as above, used as check string and not actually used as IV at this time
+// device_key.h file should look like whats in the github
 #include "images.h"
 
 #define LCD_CS 9
@@ -35,7 +30,7 @@
 
 AESLib aesLib;
 
-const String SW_VERSION = "2.2";
+const String SW_VERSION = "2.3";
 const String CRYPTO_VERSION = "2";
 String COMM_KEY_HASH = "NOT_READY";
 // I love you Iona
@@ -51,6 +46,7 @@ bool encryptComm = false;
 String currentKey = "";
 String currentIV = "";
 int usageKey = 0;
+int currentIndex = 0;
 int active_r;
 int active_g;
 int active_b;
@@ -72,11 +68,11 @@ void setup() {
   ledColor(0);
 
   Serial.begin(4800);
-  currentKey = initCommunicationLKey;
-  currentIV = ininCommunicationIV;
-  String combinded_hash = initCommunicationLKey;
+  currentKey = initCommunicationLKey[currentIndex];
+  currentIV = ininCommunicationIV[currentIndex];
+  String combinded_hash = initCommunicationLKey[currentIndex];
   combinded_hash += "-";
-  combinded_hash += ininCommunicationIV;
+  combinded_hash += ininCommunicationIV[currentIndex];
   MD5.beginHash();
   MD5.print(combinded_hash.c_str());
   MD5.endHash();
@@ -89,7 +85,6 @@ void setup() {
   }
   Serial.println("\n\n\nSG_CRYPTO_RESET");
 }
-
 
 void loop() {
   if (Serial.available()) {
@@ -137,11 +132,27 @@ void parseLevel0Message(String receivedMessage) {
   } else if (command == "6") {
     //TODO: Set LED Color
     if (deviceReady == false) {
-      encryptComm = true;
-      String message = "SG_ENC_READY";
-      Serial.println(message);
-      sendEncryptedMessage(message);
-      Serial.println("SG_LV0_GOODBYE");
+      int appIDIndex = receivedMessage.indexOf(":", commandIndex + 1);
+      String appID = receivedMessage.substring(commandIndex + 1, appIDIndex);
+      int foundIndex = -1;
+      for (int i=0; i < numOfKeys; i++) {
+        if (String(applicationID[i]) == appID) {
+          foundIndex = i;
+        }
+      }
+      if (foundIndex == -1) {
+        errorNumber = "0001";
+        lockDevice();
+      } else {
+        currentIndex = foundIndex;
+        currentKey = initCommunicationLKey[currentIndex];
+        currentIV = ininCommunicationIV[currentIndex];
+        encryptComm = true;
+        String message = "SG_ENC_READY";
+        Serial.println(message);
+        sendEncryptedMessage(message);
+        Serial.println("SG_LV0_GOODBYE");
+      }
     } else {
       errorNumber = "0055";
       lockDevice();
@@ -151,7 +162,6 @@ void parseLevel0Message(String receivedMessage) {
     lockDevice();
   }
 }
-
 // ?  Ping
 // 0  Release Hardware
 // 1  Claim Hardware
@@ -185,8 +195,8 @@ void parseLevel1Message(String receivedMessage) {
       analogWrite(LCD_BL, 2);
       delay(100);
       encryptComm = false;
-      currentKey = initCommunicationLKey;
-      currentIV = ininCommunicationIV;
+      currentKey = initCommunicationLKey[currentIndex];
+      currentIV = ininCommunicationIV[currentIndex];
       Serial.println("SG_LV0_HELLO");
     } else  {
       errorNumber = "0011";
@@ -194,7 +204,7 @@ void parseLevel1Message(String receivedMessage) {
     }
   } else if (command == "1") {
     if (deviceReady == false && exchangeStage == 0) {
-      drawActiveInfo("OPEN DEV", keychipText);
+      drawActiveInfo("OPEN DEV", keychipText[currentIndex]);
       deviceReady = true;
       exchangeStage = 1;
       ledColor(2);
@@ -210,8 +220,8 @@ void parseLevel1Message(String receivedMessage) {
     ledColor(6);
     sendEncryptedMessage("SG_RESET");
     Serial.println("SG_LV1_RESET");
-    currentKey = initCommunicationLKey;
-    currentIV = ininCommunicationIV;
+    currentKey = initCommunicationLKey[currentIndex];
+    currentIV = ininCommunicationIV[currentIndex];
   } else if (command == "5") {
     String res = "FIRMWARE_VER_";
     res += SW_VERSION;
@@ -230,17 +240,17 @@ void parseLevel1Message(String receivedMessage) {
       String appDriveStr = receivedMessage.substring(appIDIndex + 1, appDriveIndex);
       int appDrive = appDriveStr.toInt();
 
-      if (appID == applicationID && open_disks[appDrive] == 0) {
-        String inputString = applicationID;
+      if (appID == applicationID[currentIndex] && open_disks[appDrive] == 0) {
+        String inputString = applicationID[currentIndex];
         inputString += " Copyright(C)SEGA ";
-        inputString += applicationIV;
+        inputString += applicationIV[currentIndex];
         inputString += " DISK";
         inputString += appDrive;
         inputString += " 0x0001";
         String line1 = "DISK KEY REQ ";
         line1 += appDrive;
-        drawActiveInfo(line1, keychipText);
-        SHA256.beginHmac(applicationKey);
+        drawActiveInfo(line1, keychipText[currentIndex]);
+        SHA256.beginHmac(applicationKey[currentIndex]);
         SHA256.print(inputString);
         SHA256.endHmac();
 
@@ -258,7 +268,7 @@ void parseLevel1Message(String receivedMessage) {
         delay(1000);
         analogWrite(LCD_BL, 64);
       } else {
-        if (appID != applicationID) {
+        if (appID != applicationID[currentIndex]) {
           errorNumber = "0001";
         } else if (open_disks[appDrive] == 0) {
           errorNumber = "0091";
@@ -273,13 +283,13 @@ void parseLevel1Message(String receivedMessage) {
     }
   } else if (command == "11") {
     if (deviceReady == true && exchangeStage == 2) {
-      drawActiveInfo("APP RUNNING", keychipText);
+      drawActiveInfo("APP RUNNING", keychipText[currentIndex]);
       ledColor(10);
       analogWrite(LCD_BL, 255);
       delay(100);
       analogWrite(LCD_BL, 64);
       String res = "KEYCHIP_ID_";
-      res += keychipID;
+      res += keychipID[currentIndex];
       deviceReady = true;
       exchangeStage = 3;
       sendEncryptedMessage(res);
@@ -426,7 +436,7 @@ void drawKeychipInfo() {
   tft.setFont(&FreeSans9pt7b);
   int16_t x, y, rectX, rectY, rectHeight, rectWidth;
   uint16_t w, h;
-  const String censoredID = String(keychipID).substring(0, 13);
+  const String censoredID = String(keychipID[currentIndex]).substring(0, 13);
   tft.getTextBounds(censoredID, 0, 0, &x, &y, &w, &h);
   x = 4;
   y = (tft.height() - h) / 2 + 51;
@@ -442,7 +452,7 @@ void drawKeychipInfo() {
   y = y + h + 4;
   tft.setCursor(x, y);
   tft.setTextColor(BG_COLOR);
-  tft.print(keychipText);
+  tft.print(keychipText[currentIndex]);
 }
 void drawActiveInfo(String line1, String line2) {
   tft.setFont(&FreeSans9pt7b);

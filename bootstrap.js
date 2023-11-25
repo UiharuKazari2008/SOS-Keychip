@@ -1,6 +1,6 @@
-const application_version = 2.11;
+const application_version = 2.12;
 const expected_crypto_version = 2;
-const min_firmware_version = 2.0;
+const min_firmware_version = 2.3;
 process.stdout.write('[34m:[34m:[34m:[34m:[34m:[34m;[36mt[37mX[97m#[97mW[97m#[97m#[97m#[97m#[97mW[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97mW[97mW[97m#[97m#[97m#[37mB[37mV[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[94m=[34m;[34m:[34m;[94mi[36mt[37mB[37mB[97mW[37mB[37mX[37mV[36mI[90mI[37mV[37mB[37mM[97mW[37mM[37mX[94mY[94mI[94mt[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[34m+[94mI[94mI[34m+[34m=[0m\n' +
     '[34m:[34m:[34m:[34m:[34m;[36mt[37mR[97m#[97mM[97mW[97m#[97m#[97m#[97mW[97mW[37mM[97m#[97m#[97m#[97m#[97mM[97mW[97m#[97mW[97mW[97mW[97mM[97mW[97m#[37mB[37mV[34m+[34m;[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[94m+[34m=[34m;[34m=[94m+[36mI[37mR[37mM[97mW[37mR[37mV[37mV[37mR[37mB[37mM[97mW[37mM[37mX[94mY[36mi[34m=[34m;[34m;[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m+[34m+[36mt[34m=[0m\n' +
     '[34m:[34m:[34m:[34m;[90mI[37mB[97m#[97m#[37mM[97m#[97m#[97m#[97m#[97mW[37mB[97mW[97m#[97m#[97m#[37mM[97mW[37mM[37mB[97mW[97mW[37mM[37mB[37mB[37mM[97mW[37mB[90mY[36mi[34m;[34m:[34m:[34m:[34m=[36mi[36mi[34m+[34m=[34m;[34m;[34m=[34m=[34m=[36mI[37mR[97mW[97mW[37mR[37mB[97mW[97mW[97mW[37mM[37mR[94mY[36mi[34m;[34m:[34m:[34m:[34m:[34m;[34m:[34m:[34m;[34m;[34m;[34m;[34m:[34m:[34m:[34m:[34m=[34m:[34m;[34m;[0m\n' +
@@ -86,7 +86,7 @@ const cliArgs = yargs(hideBin(process.argv))
 
     .option('applicationExec', {
         type: 'string',
-        description: 'File to execute (must be in X:\\)\nDefault order:\n1. X:\\<applicationExec>\n2. X:\\game.ps1\n3. X:\\bin\\game.bat'
+        description: 'File to execute (must be in X:\\)\nDefault order:\n1. X:\\<applicationExec>\n2. X:\\game.ps1\n3. X:\\bin\\game.bat\n4.X:\\bin\\start.bat'
     })
     .option('prepareScript', {
         alias: 'p',
@@ -409,6 +409,9 @@ async function postCheckIn() {
             } else if (fs.existsSync(resolve(`X:/bin/game.bat`))) {
                 process.stdout.write("\n");
                 await runAppScript(`X:/bin/game.bat`, true);
+            } else if (fs.existsSync(resolve(`X:/bin/start.bat`))) {
+                process.stdout.write("\n");
+                await runAppScript(`X:/bin/start.bat`, true);
             } else {
                 process.stdout.write("\nNo application was found!\n\n");
             }
@@ -701,13 +704,13 @@ function parseIncomingMessage(receivedData) {
         } else {
             port.write('@5!');
             sleep(100).then(() => {
-                port.write('@6!');
+                port.write(`@6:${options.applicationID}:!`);
             });
         }
     } else if (receivedData === 'SG_LV1_RESET' || receivedData === 'SG_LV1_GOODBYE') {
         ps.dispose().then(r => process.exit(0));
     } else if (receivedData === 'SG_LV0_GOODBYE') {
-        sendMessage('1');
+        sendMessage(`1`);
     } else if (receivedData === 'SG_ENC_READY') {
         if (options.verbose) {
             console.log(`Switching to Encrypted Mode`);

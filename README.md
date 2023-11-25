@@ -44,9 +44,10 @@ In order of operation
 15. Keychip is locked and placed in a offline state
 
 ## Updates in Firmware 2.0
-* Keychip operations are split with Level 0 and Level 1
-* Level 1 operations use CMAK cycling key encryption and every message has a new key attached and must be used for the next command
-* Level 1 keys can be reset using a update operation if the keychip client must be temporarily paused
+* (2.3) Supports multiple games on the same hardware key
+* (2.0) Keychip operations are split with Level 0 and Level 1
+* (2.0) Level 1 operations use CMAK cycling key encryption and every message has a new key attached and must be used for the next command
+* (2.0) Level 1 keys can be reset using a update operation if the keychip client must be temporarily paused
 
 ## Setup
 0. Download the latest executables (and VHD Images if this is your first time)
@@ -54,18 +55,21 @@ In order of operation
   * https://github.com/UiharuKazari2008/SOS-Keychip/releases/tag/VHD-Templates
 1. Create a device_key.h file in the ./Keychip-<version> folder
 ```cplusplus
-const char* keychipText = "XXXX XX XX";
-const char* keychipID = "XXXX-XXXXXXXXXXX";
-const char* applicationID = "XXXX";
-const char* applicationKey = "GAME_KEY";
-const char* applicationIV = "EXPECTED_CLIENT_IV";
+const int numOfKeys = 1;
+const char* keychipText[numOfKeys] = { "XXXX XX XX" };
+const char* keychipID[numOfKeys] = { "XXXX-XXXXXXXXXXX" };
+const char* applicationID[numOfKeys] = { "XXXX" };
+const char* applicationKey[numOfKeys] = { "GAME_KEY" };
+const char* applicationIV[numOfKeys] = { "EXPECTED_CLIENT_IV" };
 
-const char* initCommunicationLKey = "INITAL_128_AES_KEY";
-const char* ininCommunicationIV = "INITAL_128_IV_KEY";
+const char* initCommunicationLKey[numOfKeys] = { "INITAL_128_AES_KEY" };
+const char* ininCommunicationIV[numOfKeys] = { "INITAL_128_IV_KEY" };
 ```
+* To use multiple keys for multiple games increase the `numOfKeys` and add them to the arrays
 2. Create CMAK authentication string
     * Authentication String should be a [base64 encoded string](https://www.bing.com/search?q=base64+encode) like bellow with each value separated by spaces
     * `GAMEID INITAL_128_AES_KEY INITAL_128_IV_KEY`
+    * If you are using mutiple keys/games you must use a seperate authentication key for each
 3. Launch Arduino IDE and flash the firmware
   * Install the following libraries with the library manager
     * ArduinoBearSSL
