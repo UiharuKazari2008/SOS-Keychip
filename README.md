@@ -7,7 +7,6 @@ Keychip emulator that handles game disk encryption and application lifecycle man
 This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is designed to work with a sudo-ALLS setup where sgpreboot does not exist. It is designed to recreate the hardware key requirement to use the game and protect data in transit and from offline ripping. This is not designed to be super high security.
 
 ## ToDo
-* Option to not run application as administration due to weird issues (Diva......)
 * Add special update password keystore for decrypting update files
 * Add documention on how to pack inital application installation 7z file for easy distribution
 * Segatools.ini keychip updates or direct integration to amdeamon
@@ -19,41 +18,17 @@ This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is
 * Protection of a game/application when the host in transport
 * Prevention of offline data ripping
 
+## I need help and it's not worth an Issue
+For the love of god please don't post actually game keys in Issues, thanks<br/>
+You can message me on discord (NOT FRIEND FREQUEST, MESSAGE REQUEST) `@vorekazari` or you know who I am in Missless<br/>
+![image](https://github.com/UiharuKazari2008/SOS-Keychip/assets/15165770/f9ba98ae-7b46-454d-a1a5-c97c9a8813e9)
+
 ## Hardware
 **More than 2KB of RAM IS REQUIRED**<br/>
 Waveshare RP2040-GEEK<br>
 <img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/IMG_5948.jpg"/><br>
 or any generic RP2040/Arduino<br/>
 **The SHA256 Implementation between the Arduino and other hardware ***may not*** be cross-compatible! Pick one hardware standard and stick with it for your own sanity**
-
-## CMAK (Required in 2.0+)
-CMAK (Cycling Message Authentication Key) is designed to prevent tampering and readability of messages to/from the keychip and system. Any and all serial messages that are sent in LV1 mode are encrypted using a key that was attached to the previous message and so on. The only way to decrypt the chain is to have access to the inital communication key that is set on the host.
-
-## Keychip Lifecycle
-In order of operation
-1. Client opens serial port
-2. Client takes ownership of hardware and enters ready state
-3. Client requests firmware/crypto scheme versions
-4. Client switches Keychip to Level 1 or CMAK (Cycling Message Authentication Keying)
-5. Client mounts disk and prepares BitLocker unlock request
-6. Client requests disk password with ID and IV
-7. Keychip replys with disk password
-8. Client uses password to unlock disk
-9. Repeat step 3 until all disks are ready
-10. Client requests full Keychip ID
-11. Client injects KID into deamon
-12. Client starts application and continues to ping keychip
-    * If hardware is removed application will terminate and will panic eject all media
-    * In RO setup, when cabinet is powered off (Steps 12 and beyond are not done) keychip should show RESET_OK when powered on
-13. Waits for application to be terminated
-14. Disks are locked and unmounted
-15. Keychip is locked and placed in a offline state
-
-## Updates in Firmware 2.0
-* (2.3) Supports multiple games on the same hardware key
-* (2.0) Keychip operations are split with Level 0 and Level 1
-* (2.0) Level 1 operations use CMAK cycling key encryption and every message has a new key attached and must be used for the next command
-* (2.0) Level 1 keys can be reset using a update operation if the keychip client must be temporarily paused
 
 ## Setup
 0. Download the latest executables (and VHD Images if this is your first time)
@@ -120,37 +95,6 @@ const char* ininCommunicationIV[numOfKeys] = { "INITAL_128_IV_KEY" };
 & ./savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd
 ```
 
-## Update Games Data
-To update option data you must add `--editMode` to enable read-write access
-```powershell
-& ./savior_of_song_keychip.exe --auth AUTH_STRING --optionVHD option.vhd --editMode
-```
-  * Remember to --shutdown or the hardware will lockout
-
-## Proper Shutdown
-If you are not restarting/powering off your hardware after the game, you must check-out otherwise the keychip will lockout. Run this command after game exe has close.
-```powershell
-& ./savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
-```
-
-## I need help and its not worth a Issue
-For the love of god please don't post actually game keys in Issues, thanks<br/>
-You can message me on discord (NOT FRIEND FREQUEST, MESSAGE REQUEST) `@vorekazari` or you know who I am in Missless<br/>
-![image](https://github.com/UiharuKazari2008/SOS-Keychip/assets/15165770/f9ba98ae-7b46-454d-a1a5-c97c9a8813e9)
-
-## Error Codes
-The keychip is designed to handle requests in a very specific order and if any command is ran that is not at the correct stage the device will lock and require a power cycle.
-* 0001 - Application does not match keychip's known store (Unlock Disk)
-* 0091 - Illegal unlock of disk that has previouly been unlocked
-* 9000 - Unknown Error when unlocking disk
-* 0050 - Illegal Firmware and checksum request when device is owned
-* 0055 - Illegal Mode request when exsiting chain was formed
-* 0075 - Illegal Command in the current operation mode
-* 0013 - Generic Unlock Error
-* 0010 - Tried to take ownership when the device is already in use
-* 0011 - Tried to release ownership when the device was never in use
-* 0013 - Requested Keychip ID before unlock of any disks
-
 ## Command Line Options
 ```powershell
 Savior of Song Keychip vX.XX
@@ -176,7 +120,11 @@ Options:
                          3. X:\bin\game.bat
                          4. X:\bin\start.bat                            [string]
   -p, --prepareScript    PS1 Script to execute to prepare host          [string]
-  -q, --cleanupScript    PS1 Script to execute when shutting down       [string]
+  -k, --shutdownScript   PS1 Script to execute when application is terminated
+                         This is where tasks that require access to AppData
+                         should occur (Only AppData is Writable)        [string]
+  -q, --cleanupScript    PS1 Script to execute right before exiting keychip
+                                                                        [string]
       --update           Mount Application with write access and run update
                          script (must be in X:\)
                          Default Order:
@@ -190,167 +138,32 @@ Options:
       --dontCleanup      Do not unmount all disk images mounted
 ```
 
+## Update Games Data
+To update option data you must add `--editMode` to enable read-write access
+```powershell
+& ./savior_of_song_keychip.exe --auth AUTH_STRING --optionVHD option.vhd --editMode
+```
+  * Remember to --shutdown or the hardware will lockout
+
+## Proper Shutdown
+If you are not restarting/powering off your hardware after the game, you must check-out otherwise the keychip will lockout. Run this command after game exe has close.
+```powershell
+& ./savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
+```
+
 ## Basic "just run the application" BAT file<br/>
 **RUN AS ADMINISTRATOR**<br/>
 This will login and launch one of the following (X:\game.ps1 or X:\bin\game.bat)
 ```powershell
 savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd
 ```
+## ARS NOVA preboot and appboot
+If you are setting of a cabinet and want a proper workflow, use the example in the `preboot` folder of this repository, All infomation are within the README.md files of each directory<br/>
+It was removed from this page due to clutter and was taking up to much space for such a complex setup<br/>
+And No there are no images for ALLS NOVA Standard in this repository and are not distributed publicly
 
-## Creating your own sgpreboot (Fancy "this is a ALLS" setup)
-**C:\ MUST be encrypted with TPM at all times and enable write filter for C:\ if required**<br/>
-
-### System Folder
-The system folder should be located in `C:\SEGA\system` and contain the following files:<br>
-```
-savior_of_song_keychip.exe
-secure.ps1
-```
-#### secure.ps1
-This is placed inside the system folder because it should be protected by BitLocker
-```powershell
-$game_id = "XXXX"
-$keychip_auth = "AUTH_STRING"
-```
-### Application Folder
-This should be located in a decrypted partition mounted at `S:\XXXX` (where **XXXX** is your game id), it should cotain the following files:<br/>
-```
-    Directory: S:\XXXX
-
-
-Mode                 LastWriteTime         Length Name
-----                 -------------         ------ ----
-d-----        09/11/2023     19:25                preboot_data
-d-----        09/11/2023     19:18                V0001
-d-----        09/11/2023     19:18                V0002
--a----        09/11/2023     21:25            632 enviorment.ps1
--a----        09/11/2023     21:45            222 mount.ps1
--a----        09/11/2023     21:22            869 prepare.ps1
--a----        09/11/2023     21:22            869 cleanup.ps1
--a----        13/11/2023     23:03            844 start.ps1
--a----        10/11/2023     02:04           1182 stop.ps
-```
-Each game version/edition should be in a separate folder and contain the VHDs<br/>
-```
-    Directory: S:\XXXX\V0001
-
-
-Mode                 LastWriteTime         Length Name
-----                 -------------         ------ ----
--a----        13/11/2023     23:03     8615190528 app.vhd
--a----        13/11/2023     23:03       23130112 appdata.vhd
--a----        13/11/2023     23:03     3303301120 option.vhd
-```
-#### enviorment.ps1
-The enviorment file is loaded before each start/stop/mount/dismount
-```powershell
-. C:\SEGA\system\secure.ps1
-
-$game_folder = "S:\${game_id}"
-$version = $(Get-Content -Path "${game_folder}\preboot_data\disk")
-$audio_dev = "Multichannel Output*"
-
-if ($version -eq 10) {
-  $install = "${game_folder}\V0001"
-} elseif ($version -eq 11) {
-  $install = "${game_folder}\V0002"
-}
-
-$base = "${install}\app.vhd"
-$data = "${install}\appdata.vhd"
-$option = "${install}\option.vhd"
-```
-Create a if statement for each version you would want to "disk swap" with, set the version in the `preboot_data\disk` file (just a number or string)
-#### prepare.ps1
-**This is only a example file and will for obvious reason not work for you**<br/>
-A lot of my tasks are done via task scheduler to allow for asynchronous tasks and to handle elevation if used by another system<br/>
-This file should contain tasks like:
-* Setting audio devices
-* Rotate Display
-* Set Display Refresh Rate
-* Close Applications
-* Enter Lockdown Mode
-```powershell
-. S:\XXXX\enviorment.ps1
-$Mouse=@' 
-[DllImport("user32.dll",CharSet=CharSet.Auto, CallingConvention=CallingConvention.StdCall)]
-public static extern void mouse_event(long dwFlags, long dx, long dy, long cButtons, long dwExtraInfo);
-'@ 
-$SendMouseClick = Add-Type -memberDefinition $Mouse -name "Win32MouseEventNew" -namespace Win32Functions -passThru
-Function Move-Mouse {
-
-`	Param (
-        [int]$X, [int]$y
-
-    )
-
-Process {
-
-        Add-Type -AssemblyName System.Windows.Forms
-        $screen = [System.Windows.Forms.SystemInformation]::VirtualScreen
-        $screen | Get-Member -MemberType Property
-        $screen.Width = $X
-        $screen.Height = $y
-        [Windows.Forms.Cursor]::Position = "$($screen.Width),$($screen.Height)"
-
-
-    }
-}
-
-Get-Process -Name slidershim -ErrorAction SilentlyContinue | Stop-Process -ErrorAction Stop # Only used for Sequenzia ADS UI and kill to release slider for game
-Get-Process | Where-Object {$_.MainWindowTitle -eq "Sequenzia - [InPrivate]"} | Stop-Process -ErrorAction SilentlyContinue
-Get-Process | Where-Object {$_.MainWindowTitle -eq "CHUN - [InPrivate]"} | Stop-Process -ErrorAction SilentlyContinue
-Stop-ScheduledTask -TaskName "StartHDMIAudio" -ErrorAction SilentlyContinue
-taskkill /F /IM explorer.exe | Out-Null
-if ($(Get-Process -Name mono-to-stereo -ErrorAction SilentlyContinue).Count -gt 0) {
-    Get-Process -Name mono-to-stereo -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-}
-Get-AudioDevice -List | Where-Object { $_.Type -eq "Playback" -and $_.Name -like "${audio_dev}" } | Set-AudioDevice -ErrorAction Stop | Out-Null # Set System Audio to Multichannel Sound Card
-Start-ScheduledTask -TaskName "JVSEnable" -ErrorAction Stop # PowerShell.exe -WindowStyle hidden -Command "Get-PnpDevice -InstanceId 'USB\VID_0CA3&PID_0021\6&3A944CE5&0&2' | Enable-PnpDevice -Confirm:$false"
-Start-ScheduledTask -TaskName "LockdownFirewall" -ErrorAction Stop
-
-Move-Mouse -X 1920 -y 0 | Out-Null
-```
-#### start.ps1
-This is what you call **as administrator** when you are starting the game
-* This will look for a USB Drive called "SOS_INS" and if found run the update script
-* Then run the keychip booting the default application script
-```powershell
-. .\enviorment.ps1
-if ((Get-Volume -FileSystemLabel SOS_INS -ErrorAction SilentlyContinue | Format-List).Length -gt 0) {
-    Start-Process -Wait -WindowStyle Normal -FilePath "C:\SEGA\system\savior_of_song_keychip.exe" -ArgumentList "--auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --update"
-}
-Start-Process -Wait -WindowStyle Normal -FilePath "C:\SEGA\system\savior_of_song_keychip.exe" -ArgumentList "--auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --prepareScript prepare.ps1 --cleanupScript shutdown.ps1"
-```
-#### stop.ps1
-Closes the application to allow the keychip to shutdown
-```powershell
-Get-Process -Name inject_x86 -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-Get-Process -Name inject_x64 -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-Get-Process -Name <GAME_EXE> -ErrorAction SilentlyContinue | Stop-Process -ErrorAction SilentlyContinue
-```
-`<GAME_EXE>` is the actual games process name, like *mercury*
-#### cleanup.ps1
-What is called to stop the game processes and clean up (needed if your automating and this is a multi-purpose system)
-```powershell
-. .\enviorment.ps1
-if ((Get-Process -Name explorer).Length -eq 0) { & explorer.exe }
-Start-ScheduledTask -TaskName "JVSDisable" -ErrorAction Stop # PowerShell.exe -WindowStyle hidden -Command "Get-PnpDevice -InstanceId 'USB\VID_0CA3&PID_0021\6&3A944CE5&0&2' | Disable-PnpDevice -Confirm:$false"
-Start-ScheduledTask -TaskName "EnableVNC" -ErrorAction SilentlyContinue # PowerShell.exe -WindowStyle hidden -Command "Start-Service -Name tvnserver"
-Get-AudioDevice -List | Where-Object { $_.Type -eq "Playback" -and $_.Name -like "VoiceMeeter Aux Input*" } | Set-AudioDevice | Out-Null
-```
-#### mount.ps1
-Used to mount disks as read-write to performance manual modifitications
-```powershell
-cd S:\XXXX\
-
-. .\enviorment.ps1
-Start-Process -Wait -WindowStyle Normal -FilePath "C:\SEGA\system\savior_of_song_keychip.exe" -ArgumentList "--auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --editMode"
-Read-Host "Press key to dismount"
-Start-Process -Wait -WindowStyle Normal -FilePath "C:\SEGA\system\savior_of_song_keychip.exe" -ArgumentList "--auth $keychip_auth --applicationVHD $base --appDataVHD $data --optionVHD $option --shutdown"
-```
-### Application VHD Filesystems
-#### app.vhd
+## Application VHD Filesystems
+### app.vhd
 This should contain the base application and all thats required to run the application
 ```
     Directory: X:\
@@ -378,42 +191,8 @@ This will be a Read-Only filesystem when active
 * `appdata` links to Y:\appdata
 * `options` links to Z:\
 * `segatools.ini` links to Y:\segatools.ini
-##### game.ps1
-This is the script to launch the game. 
-This is considered "secure" and is located in the game to prevent modification 
-```powershell
-$game_exec = "GAME_NAME.exe"
-$game_hook = "GAME_HOOK.dll"
-$am_hook = "AM_HOOK.dll"
-$am_opts = "JSON FILES"
 
-Write-Host "############################"
-cd X:\bin\
-Get-Process -Name amdaemon -ErrorAction SilentlyContinue | Stop-Process -Force:$true -ErrorAction SilentlyContinue
-Start-Process -WindowStyle Minimized -FilePath inject_x64.exe -ArgumentList "-d -k ${am_hook} amdaemon.exe -f -c ${am_opts}"
-& .\inject_x86.exe -d -k ${game_hook} ${game_exec}
-Write-Host ""
-Write-Host "############################"
-Write-Host " TERMINATED"
-Write-Host "############################"
-```
-##### update.ps1 or download.ps1
-* Update must be 7z format and contain only option folders in the root of the archive
-* Installation of Option packs will cause a full check-in and check-out of the keychip in update mode, Please be present at the cabinet and ensure the host is secure as the disks will be read-write during the updates!
-* Later versions will support full installations based on the SOS VHD format and encrypted updates
-```powershell
-if ((Get-Volume -FileSystemLabel SOS_INS -ErrorAction SilentlyContinue | Format-List).Length -gt 0) {
-    $letter = (Get-Volume -FileSystemLabel SOS_INS).DriveLetter
-    Get-ChildItem -Path "${letter}:\*.7z" | ForEach-Object {
-        & 'C:\Program Files\7-Zip\7z.exe' x -aoa -oZ:\ "${_}"
-    }
-    Write-Host "Update Complete!"
-}
-```
-If you have a remote update script that was provided by your network administrator then it should be placed in the X:\ drive and no update.ps1 should be present<br/>
-This project is not responsible for the creation or maintenance of said scripts
-
-#### appdata.vhd
+### appdata.vhd
 This is Read-Write storage for all app data and configuration files
 ```powershell
 
@@ -427,8 +206,50 @@ d-----        08/11/2023     15:43                appdata
 -a----        08/11/2023     15:43            379 segatools.ini
 ```
 * You can move segatools.ini overtop the one in X:\bin if you want to prevent modification
-#### option.vhd
+### option.vhd
 Contains all option folders and is empty by default
+
+## Error Codes
+The keychip is designed to handle requests in a very specific order and if any command is ran that is not at the correct stage the device will lock and require a power cycle.
+* 0001 - Application does not match keychip's known store (Unlock Disk)
+* 0091 - Illegal unlock of disk that has previouly been unlocked
+* 9000 - Unknown Error when unlocking disk
+* 0050 - Illegal Firmware and checksum request when device is owned
+* 0055 - Illegal Mode request when exsiting chain was formed
+* 0075 - Illegal Command in the current operation mode
+* 0013 - Generic Unlock Error
+* 0010 - Tried to take ownership when the device is already in use
+* 0011 - Tried to release ownership when the device was never in use
+* 0013 - Requested Keychip ID before unlock of any disks
+
+## Updates in Firmware 2.0
+* (2.3) Supports multiple games on the same hardware key
+* (2.0) Keychip operations are split with Level 0 and Level 1
+* (2.0) Level 1 operations use CMAK cycling key encryption and every message has a new key attached and must be used for the next command
+* (2.0) Level 1 keys can be reset using a update operation if the keychip client must be temporarily paused
+
+## CMAK (Required in 2.0+)
+CMAK (Cycling Message Authentication Key) is designed to prevent tampering and readability of messages to/from the keychip and system. Any and all serial messages that are sent in LV1 mode are encrypted using a key that was attached to the previous message and so on. The only way to decrypt the chain is to have access to the inital communication key that is set on the host.
+
+## Keychip Lifecycle
+In order of operation
+1. Client opens serial port
+2. Client takes ownership of hardware and enters ready state
+3. Client requests firmware/crypto scheme versions
+4. Client switches Keychip to Level 1 or CMAK (Cycling Message Authentication Keying)
+5. Client mounts disk and prepares BitLocker unlock request
+6. Client requests disk password with ID and IV
+7. Keychip replys with disk password
+8. Client uses password to unlock disk
+9. Repeat step 3 until all disks are ready
+10. Client requests full Keychip ID
+11. Client injects KID into deamon
+12. Client starts application and continues to ping keychip
+    * If hardware is removed application will terminate and will panic eject all media
+    * In RO setup, when cabinet is powered off (Steps 12 and beyond are not done) keychip should show RESET_OK when powered on
+13. Waits for application to be terminated
+14. Disks are locked and unmounted
+15. Keychip is locked and placed in a offline state
 
 ## Build EXE
 ```powershell

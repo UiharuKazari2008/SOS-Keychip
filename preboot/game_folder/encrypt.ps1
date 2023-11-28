@@ -1,0 +1,2 @@
+﻿. .\enviorment.ps1
+& C:\SEGA\system\savior_of_song_keychip.exe --loginKey $keychip_key --loginIV $keychip_iv --applicationID $game_id --applicationVHD $base --appDataVHD $data --optionVHD $option --encryptSetup

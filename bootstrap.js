@@ -1,7 +1,8 @@
-const application_version = 2.15;
+const application_version = 2.16;
 const expected_crypto_version = 2;
 const min_firmware_version = 2.3;
-process.stdout.write('[34m:[34m:[34m:[34m:[34m:[34m;[36mt[37mX[97m#[97mW[97m#[97m#[97m#[97m#[97mW[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97mW[97mW[97m#[97m#[97m#[37mB[37mV[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[94m=[34m;[34m:[34m;[94mi[36mt[37mB[37mB[97mW[37mB[37mX[37mV[36mI[90mI[37mV[37mB[37mM[97mW[37mM[37mX[94mY[94mI[94mt[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[34m+[94mI[94mI[34m+[34m=[0m\n' +
+process.stdout.write(
+    '[34m:[34m:[34m:[34m:[34m:[34m;[36mt[37mX[97m#[97mW[97m#[97m#[97m#[97m#[97mW[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97mW[97mW[97m#[97m#[97m#[37mB[37mV[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[94m=[34m;[34m:[34m;[94mi[36mt[37mB[37mB[97mW[37mB[37mX[37mV[36mI[90mI[37mV[37mB[37mM[97mW[37mM[37mX[94mY[94mI[94mt[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[34m+[94mI[94mI[34m+[34m=[0m\n' +
     '[34m:[34m:[34m:[34m:[34m;[36mt[37mR[97m#[97mM[97mW[97m#[97m#[97m#[97mW[97mW[37mM[97m#[97m#[97m#[97m#[97mM[97mW[97m#[97mW[97mW[97mW[97mM[97mW[97m#[37mB[37mV[34m+[34m;[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[94m+[34m=[34m;[34m=[94m+[36mI[37mR[37mM[97mW[37mR[37mV[37mV[37mR[37mB[37mM[97mW[37mM[37mX[94mY[36mi[34m=[34m;[34m;[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m+[34m+[36mt[34m=[0m\n' +
     '[34m:[34m:[34m:[34m;[90mI[37mB[97m#[97m#[37mM[97m#[97m#[97m#[97m#[97mW[37mB[97mW[97m#[97m#[97m#[37mM[97mW[37mM[37mB[97mW[97mW[37mM[37mB[37mB[37mM[97mW[37mB[90mY[36mi[34m;[34m:[34m:[34m:[34m=[36mi[36mi[34m+[34m=[34m;[34m;[34m=[34m=[34m=[36mI[37mR[97mW[97mW[37mR[37mB[97mW[97mW[97mW[37mM[37mR[94mY[36mi[34m;[34m:[34m:[34m:[34m:[34m;[34m:[34m:[34m;[34m;[34m;[34m;[34m:[34m:[34m:[34m:[34m=[34m:[34m;[34m;[0m\n' +
     '[34m:[34m:[34m;[90mI[37mR[97mW[97m#[97m#[97m#[97m#[97m#[97m#[97m#[97m#[37mX[97mM[97mW[97m#[97m#[37mB[37mB[37mB[37mV[37mR[97mW[97mW[37mB[37mB[37mR[37mX[37mB[97mM[37mR[37mY[36mt[36mi[36mt[36mt[34m;[34m;[36mi[34m;[34m:[34m;[34m=[94mi[36mi[36mI[37mX[97m#[97mM[37mR[97mW[97mW[37mB[37mX[94mY[36mi[34m=[34m;[34m;[34m=[34m+[36mi[36mt[36mI[94mY[94mY[37mV[37mV[37mV[94mV[94mV[94mY[36mI[36mt[36mi[34m=[34m;[34m:[0m\n' +
@@ -97,10 +98,15 @@ const cliArgs = yargs(hideBin(process.argv))
         type: 'string',
         description: 'PS1 Script to execute to prepare host'
     })
+    .option('shutdownScript', {
+        alias: 'k',
+        type: 'string',
+        description: 'PS1 Script to execute when application is terminated\nThis is where tasks that require access to AppData should occur (Only AppData is Writable)'
+    })
     .option('cleanupScript', {
         alias: 'q',
         type: 'string',
-        description: 'PS1 Script to execute when shutting down'
+        description: 'PS1 Script to execute right before exiting keychip'
     })
 
     .option('update', {
@@ -161,6 +167,7 @@ options = {
     applicationExec: cliArgs.applicationExec || options.app_script,
     prepareScript: cliArgs.prepareScript || options.prepare_script,
     cleanupScript: cliArgs.cleanupScript || options.cleanup_script,
+    shutdownScript: cliArgs.shutdownScript || options.shutdown_script,
     dontCleanup: cliArgs.dontCleanup || options.no_dismount_vhds,
 };
 if (cliArgs.auth) {
@@ -424,7 +431,31 @@ async function postCheckIn() {
 }
 async function runCheckOut() {
     subar.stop();
-    sdbar.start(10,0, {
+    sdbar.start(11,0, {
+        stage: "Application Terminated"
+    })
+    if (options.shutdownScript) {
+        sdbar.update(1, {
+            stage: "Shutdown System"
+        })
+        await new Promise((ok) => {
+            const prepare = spawn('powershell.exe', ['-File', resolve(options.shutdownScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+                stdio: 'inherit', // Inherit the standard IO of the Node.js process,
+                workingDirectory: process.cwd(),
+            });
+            prepare.on('exit', function () {
+                ok()
+            })
+            prepare.on('close', function () {
+                ok()
+            })
+            prepare.on('end', function () {
+                ok()
+            })
+        })
+        sdbar.increment();
+    }
+    sdbar.update(2, {
         stage: "Dismount Application"
     })
     ready = true;
@@ -451,18 +482,18 @@ async function runCheckOut() {
     if (options.verbose) {
         console.log(`Wait for Check-Out`);
     }
-    sdbar.increment();
-    sdbar.update(8, {
+    sdbar.update(9, {
         stage: "Release Keychip"
     })
     sendMessage('0');
     if (options.cleanupScript) {
-        sdbar.update(9, {
+        sdbar.update(10, {
             stage: "Cleanup System"
         })
         await new Promise((ok) => {
             const prepare = spawn('powershell.exe', ['-File', resolve(options.cleanupScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
-                stdio: 'inherit' // Inherit the standard IO of the Node.js process
+                stdio: 'inherit', // Inherit the standard IO of the Node.js process
+                workingDirectory: process.cwd(),
             });
             prepare.on('exit', function () {
                 ok()
@@ -476,7 +507,7 @@ async function runCheckOut() {
         })
         sdbar.increment();
     }
-    sdbar.update(10, {
+    sdbar.update(11, {
         stage: "Shutdown Complete"
     })
     if (!options.dontCleanup) {
@@ -849,7 +880,8 @@ port.on('open', async () => {
         });
         await new Promise((ok) => {
             const prepare = spawn('powershell.exe', ['-File', resolve(options.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
-                stdio: 'inherit' // Inherit the standard IO of the Node.js process
+                stdio: 'inherit', // Inherit the standard IO of the Node.js process
+                workingDirectory: process.cwd(),
             });
             prepare.on('exit', function () {
                 ok()
