@@ -6,6 +6,9 @@ $am_opts = ".json .json .json .json .json .json"
 $appdata_mode = "server"
 if ($(Get-Content -Path "C:\SEGA\preboot_data\server" -ErrorAction SilentlyContinue) -ne 1) {
     $appdata_mode = "client"
+    Write-Host "Running in Client Mode"
+} else {
+    Write-Host "Running in Server Mode"
 }
 Copy-Item "Y:\templates\${appdata_mode}.appfile.dat" "Y:\appdata\SDHD\appfile.dat" -Force -Confirm:$false
 
