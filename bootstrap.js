@@ -285,7 +285,7 @@ async function startCheckIn() {
         ps.dispose().then(r => process.exit(102));
     }
     if (options.applicationVHD || options.optionVHD || options.appDataVHD) {
-        await setState('11', `ファイルシステムのマウント`)
+        await setState('11', (cliArgs.update) ? `ファイルシステムのマウント (更新)` : `ファイルシステムのマウント`)
         subar.update(10, {
             stage: "Mount Application"
         });
@@ -611,7 +611,7 @@ async function runAppScript(input, is_bat) {
         } else {
             args.push(`Start-Process -Wait -FilePath runas -ArgumentList '${(parseInt((release()).split('.').pop()) >= 22000) ? '/machine:amd64' : ''} /trustlevel:0x20000 "powershell.exe -File ${input} -NoProfile:$true"'`)
         }
-        await setState('30', `まもなくゲームプログラムが起動します`, !(cliArgs.update))
+        await setState('30', (cliArgs.update) ? `更新プログラムのインストール` : `まもなくゲームプログラムが起動します`, !(cliArgs.update))
         console.error('\n\x1b[42m\x1b[30mApplication Running\x1b[0m\n');
         applicationArmed = spawn("powershell.exe", args, {
             stdio: 'inherit' // Inherit the standard IO of the Node.js process
