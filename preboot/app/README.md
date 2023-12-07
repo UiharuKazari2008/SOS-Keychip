@@ -106,7 +106,7 @@ When releaseing new updates that will contain conflicting files or are installin
 
 #### Update Encryption
 * Obtain the "Disk 9 Decryption Key" from the Keychip by running `--update -v`<br/>
-![image](https://github.com/UiharuKazari2008/SOS-Keychip/assets/15165770/b2baf853-5c87-435f-9e39-0aee5b5ab4ec)
+![image](https://github.com/UiharuKazari2008/SOS-Keychip/assets/15165770/fbb735f2-bcac-45db-bf63-bd56212449a9)
 
 * Enter the password into the Password field when creating archive<br/>
 ![image](https://github.com/UiharuKazari2008/SOS-Keychip/assets/15165770/e94b325b-42c5-4a6f-877c-c4d4e8f155a2)
