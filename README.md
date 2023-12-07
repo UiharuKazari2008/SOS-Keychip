@@ -7,8 +7,6 @@ Keychip emulator that handles game disk encryption and application lifecycle man
 This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is designed to work with a sudo-ALLS setup where sgpreboot does not exist. It is designed to recreate the hardware key requirement to use the game and protect data in transit and from offline ripping. This is not designed to be super high security.
 
 ## ToDo
-* Add special update password keystore for decrypting update files
-* Add documention on how to pack inital application installation 7z file for easy distribution
 * Segatools.ini keychip updates or direct integration to amdeamon
 * Support to auto-relaunch application on death
 * Board layout for custom keychip PCB with Infinion Private Key Store and Encryption Accelerator
