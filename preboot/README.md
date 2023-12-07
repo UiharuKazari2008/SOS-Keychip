@@ -12,4 +12,5 @@ The included scripts are not plug in play and are deliberately censored and incl
 * app = X:\
 * game_folder = S:\XXXX
 * system = C:\SEGA\system
+* SOS_INS = Update USB Format
 Each folder contains a readme of the contents
