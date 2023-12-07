@@ -158,6 +158,7 @@ This will login and launch one of the following (X:\game.ps1 or X:\bin\game.bat)
 savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd
 ```
 ## ARS NOVA preboot and appboot
+[**Now updated to work with ARS NOVA Bootloader!**](https://github.com/UiharuKazari2008/ARS-NOVA-Bootloader)<br/>
 If you are setting of a cabinet and want a proper workflow, use the example in the `preboot` folder of this repository, All infomation are within the README.md files of each directory<br/>
 It was removed from this page due to clutter and was taking up to much space for such a complex setup<br/>
 And No there are no images for ALLS NOVA Standard in this repository and are not distributed publicly
