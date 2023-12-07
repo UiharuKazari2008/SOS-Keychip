@@ -1,4 +1,4 @@
-const application_version = 2.18;
+const application_version = 2.19;
 const expected_crypto_version = 2;
 const min_firmware_version = 2.3;
 process.stdout.write(
@@ -230,6 +230,7 @@ if (cliArgs.versionFile) {
 
 let login_key_md5 = "NOT_READY";
 let watchdog = null;
+let unlockPassword = null;
 
 if (options.loginKey && options.loginIV) {
     login_key_md5 = (crypto.MD5(`${options.loginKey}-${options.loginIV}`)).toString();
@@ -402,10 +403,20 @@ async function startCheckIn() {
                 }
             }
         }
+        if (cliArgs.update) {
+            const unlockKey = await getUpdatePassword({});
+            if (!unlockKey) {
+                subar.stop();
+                console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Prepare Disk\x1b[0m');
+                await errorState('0084', 'ストレージデバイスの故障');
+                await ps.dispose().then(r => process.exit(102));
+            }
+            await sleep(1100);
+        }
         if (options.verbose)
             console.log(`Unlock Done`);
         subar.update(34);
-        await setState('21', `ゲームプログラムの起動準備中です`)
+        await setState((cliArgs.update) ? '22' : '21', (cliArgs.update) ? 'アプリケーションのアップデートが進行中です' : `ゲームプログラムの起動準備中です`)
         sendMessage('11');
     } else {
         // Nothing to do, Check-Out Crypto
@@ -433,11 +444,9 @@ async function postCheckIn() {
         subar.stop();
         if (cliArgs.update) {
             if (fs.existsSync(resolve(`X:/update.ps1`))) {
-                await runAppScript(`X:/update.ps1`);
+                await runCommand(`. X:/update.ps1  "${unlockPassword}"`);
             } else if (fs.existsSync(resolve(`X:/download.ps1`))) {
-                await runAppScript(`X:/download.ps1`);
-            } else if (fs.existsSync(resolve(`X:/bin/update.bat`))) {
-                await runAppScript(`X:/bin/update.bat`, true);
+                await runCommand(`. X:/download.ps1 "${unlockPassword}"`);
             } else {
                 await errorState('0063', 'ゲームプログラムが見つかりません');
                 console.error('\n\n\x1b[5m\x1b[41m\x1b[30mNo Update Application was found\x1b[0m\n');
@@ -607,7 +616,7 @@ async function runAppScript(input, is_bat) {
             await createTask(input, is_bat, process.cwd());
             args.push(`Start-ScheduledTask -TaskName "TEMP_SOS_APP"; While ((Get-ScheduledTask -TaskName "TEMP_SOS_APP").State -eq "Running") { Sleep -Seconds 1 }`)
         } else if (is_bat) {
-            args.push(`Start-Process -Wait -FilePath runas -ArgumentList '${(parseInt(release().split('.').pop()) >= 22000) ? '/machine:amd64' : ''} /trustlevel:0x20000 "cmd.exe /c ${input}"'`)
+            args.push(`Start-Process -Wait -WindowStyle Minimized -FilePath runas -ArgumentList '${(parseInt(release().split('.').pop()) >= 22000) ? '/machine:amd64' : ''} /trustlevel:0x20000 "cmd.exe /c ${input}"'`)
         } else {
             args.push(`Start-Process -Wait -FilePath runas -ArgumentList '${(parseInt((release()).split('.').pop()) >= 22000) ? '/machine:amd64' : ''} /trustlevel:0x20000 "powershell.exe -File ${input} -NoProfile:$true"'`)
         }
@@ -684,6 +693,28 @@ async function unlockDisk(o) {
     returned_key = null;
     await sleep(1000);
     return (unlockCmd);
+}
+async function getUpdatePassword(o) {
+    if (options.verbose) {
+        console.log(`Request Update Password`);
+    } else {
+        subar.increment();
+    }
+    returned_key = null;
+    // Request the keychip to give decryption key for applicationID with a diskNumber
+    const challangeCmd = `10:${options.applicationID}:9:`;
+    sendMessage(challangeCmd);
+    // Wait inline for response
+    while (!returned_key) {
+        await sleep(5);
+    }
+    if (options.verbose) {
+        console.log(`\n\n"${returned_key}"\n\n`)
+    }
+    unlockPassword = returned_key;
+    returned_key = null;
+    await sleep(1000);
+    return true;
 }
 async function encryptDisk(o) {
     if (options.verbose) {
