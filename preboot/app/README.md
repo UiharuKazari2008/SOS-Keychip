@@ -5,9 +5,8 @@ This is the contents of the application disk (X:\)
 This is the script to launch the game.
 This is considered "secure" and is located in the game to prevent modification
 ## update.ps1 or download.ps1
-* Update must be 7z format and contain only option folders in the root of the archive
-* Installation of Option packs will cause a full check-in and check-out of the keychip in update mode, Please be present at the cabinet and ensure the host is secure as the disks will be read-write during the updates!
-* Later versions will support full installations based on the SOS VHD format and encrypted updates
+* Update must be 7z format and follow the SOS Installation format (See bellow)
+* Installation of update packs will cause a full check-in and check-out of the keychip in update mode, **Please be present at the cabinet and ensure the host is secure as the disks will be read-write during the updates!**
 
 If you have a remote update script that was provided by your network administrator then it should be placed in the X:\ drive and no update.ps1 should be present<br/>
 This project is not responsible for the creation or maintenance of said scripts
