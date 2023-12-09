@@ -7,8 +7,6 @@ Keychip emulator that handles game disk encryption and application lifecycle man
 This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is designed to work with a sudo-ALLS setup where sgpreboot does not exist. It is designed to recreate the hardware key requirement to use the game and protect data in transit and from offline ripping. This is not designed to be super high security.
 
 ## ToDo
-* Add special update password keystore for decrypting update files
-* Add documention on how to pack inital application installation 7z file for easy distribution
 * Segatools.ini keychip updates or direct integration to amdeamon
 * Support to auto-relaunch application on death
 * Board layout for custom keychip PCB with Infinion Private Key Store and Encryption Accelerator
@@ -95,6 +93,9 @@ const char* ininCommunicationIV[numOfKeys] = { "INITAL_128_IV_KEY" };
 & ./savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd
 ```
 
+## Additional Setup
+To setup a more realistic ALLS setup refer to the [preboot](https://github.com/UiharuKazari2008/SOS-Keychip/tree/main/preboot) directory of this repo for infomation, To setup a emulated preboot refer to the [ARS NOVA Bootloader](https://github.com/UiharuKazari2008/ARS-NOVA-Bootloader) repo.
+
 ## Command Line Options
 ```powershell
 Savior of Song Keychip vX.XX
@@ -138,32 +139,20 @@ Options:
       --dontCleanup      Do not unmount all disk images mounted
 ```
 
-## Update Games Data
+## Modifying Games Data after inital Install
 To update option data you must add `--editMode` to enable read-write access
 ```powershell
 & ./savior_of_song_keychip.exe --auth AUTH_STRING --optionVHD option.vhd --editMode
 ```
-  * Remember to --shutdown or the hardware will lockout
-
-## Proper Shutdown
-If you are not restarting/powering off your hardware after the game, you must check-out otherwise the keychip will lockout. Run this command after game exe has close.
+### Proper Shutdown
+You must check-out otherwise the keychip will lockout when using disconnected updates like `--editMode`
 ```powershell
 & ./savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --shutdown
 ```
 
-## Basic "just run the application" BAT file<br/>
-**RUN AS ADMINISTRATOR**<br/>
-This will login and launch one of the following (X:\game.ps1 or X:\bin\game.bat)
-```powershell
-savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd
-```
-## ARS NOVA preboot and appboot
-If you are setting of a cabinet and want a proper workflow, use the example in the `preboot` folder of this repository, All infomation are within the README.md files of each directory<br/>
-It was removed from this page due to clutter and was taking up to much space for such a complex setup<br/>
-And No there are no images for ALLS NOVA Standard in this repository and are not distributed publicly
-
-## Application VHD Filesystems
-### app.vhd
+## VHD Filesystems
+More infomation on how to configure and setup can be found in the [preboot](https://github.com/UiharuKazari2008/SOS-Keychip/tree/main/preboot) folder of this repo!
+### app.vhd (Read Only)
 This should contain the base application and all thats required to run the application
 ```
     Directory: X:\
@@ -186,7 +175,6 @@ d----l        08/11/2023     15:46                appdata
 d----l        08/11/2023     15:46                option
 -a---l        08/11/2023     15:45              0 segatools.ini
 ```
-This will be a Read-Only filesystem when active
 * `amfs` links to Y:\amfs
 * `appdata` links to Y:\appdata
 * `options` links to Z:\
@@ -206,11 +194,12 @@ d-----        08/11/2023     15:43                appdata
 -a----        08/11/2023     15:43            379 segatools.ini
 ```
 * You can move segatools.ini overtop the one in X:\bin if you want to prevent modification
-### option.vhd
+### option.vhd (Read Only)
 Contains all option folders and is empty by default
 
 ## Error Codes
-The keychip is designed to handle requests in a very specific order and if any command is ran that is not at the correct stage the device will lock and require a power cycle.
+The keychip is designed to handle requests in a very specific order and if any command is ran that is not at the correct stage the device will lock and require a power cycle.<br/>
+NOTE: These error code apply ONLY to the SOS bootstrap and NOT the error codes that would apper on the ALLS boot screen<br/>
 * 0001 - Application does not match keychip's known store (Unlock Disk)
 * 0091 - Illegal unlock of disk that has previouly been unlocked
 * 9000 - Unknown Error when unlocking disk
