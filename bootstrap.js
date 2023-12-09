@@ -1,4 +1,4 @@
-const application_version = 2.19;
+const application_version = 2.21;
 const expected_crypto_version = 2;
 const min_firmware_version = 2.3;
 process.stdout.write(
@@ -146,7 +146,7 @@ let lastState = "";
 async function setState(step, state, completed) {
     lastStep = step;
     lastState = state;
-    const output =  `STEP ${step}=${state}=true\nerror=false`;
+    const output =  `STEP ${step}=${state}=${(completed) ? completed : 'false'}\nerror=false`;
     if (cliArgs.displayState) {
         fs.writeFileSync(cliArgs.displayState, Buffer.from(output));
     }
@@ -466,6 +466,7 @@ async function postCheckIn() {
                 await errorState('0063', 'ゲームプログラムが見つかりません');
                 console.error('\n\n\x1b[5m\x1b[41m\x1b[30mNo Application was found\x1b[0m\n');
             }
+            await errorState('0010', '予期せぬ問題によりゲームプログラムが終了しました\\nサービスポタンを押すと対処方法を表示します。');
         }
         process.stdout.write("\n");
         await runCheckOut();
@@ -620,7 +621,7 @@ async function runAppScript(input, is_bat) {
         } else {
             args.push(`Start-Process -Wait -FilePath runas -ArgumentList '${(parseInt((release()).split('.').pop()) >= 22000) ? '/machine:amd64' : ''} /trustlevel:0x20000 "powershell.exe -File ${input} -NoProfile:$true"'`)
         }
-        await setState('30', (cliArgs.update) ? `更新プログラムのインストール` : `まもなくゲームプログラムが起動します`, !(cliArgs.update))
+        await setState('30', `まもなくゲームプログラムが起動します`, true)
         console.error('\n\x1b[42m\x1b[30mApplication Running\x1b[0m\n');
         applicationArmed = spawn("powershell.exe", args, {
             stdio: 'inherit' // Inherit the standard IO of the Node.js process
