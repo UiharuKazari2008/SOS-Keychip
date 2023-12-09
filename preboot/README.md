@@ -9,8 +9,8 @@ The included scripts are not plug in play and are deliberately censored and incl
 * **C:\ MUST be encrypted with TPM at all times and enable write filter for C:\ if required**
 
 ## Folder Structure
-* app = X:\
-* game_folder = S:\XXXX
-* system = C:\SEGA\system
-* SOS_INS = Update USB Format
+* [app](https://github.com/UiharuKazari2008/SOS-Keychip/tree/main/preboot/app) = X:\
+* [game_folder](https://github.com/UiharuKazari2008/SOS-Keychip/tree/main/preboot/game_folder) = S:\XXXX
+* [system](https://github.com/UiharuKazari2008/SOS-Keychip/tree/main/preboot/system) = C:\SEGA\system
+* [SOS_INS](https://github.com/UiharuKazari2008/SOS-Keychip/tree/main/preboot/SOS_INS) = Update USB Format
 Each folder contains a readme of the contents
