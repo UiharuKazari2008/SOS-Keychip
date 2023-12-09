@@ -167,7 +167,7 @@ const sdbar = new cliProgress.SingleBar({
 subar.start(35, 0, {
     stage: "Initialization"
 });
-setState('1', `起動しています`)
+setState('1', `Boot`)
 
 if (cliArgs.env && fs.existsSync(resolve(cliArgs.env))) {
     secureOptions = JSON.parse(fs.readFileSync(resolve(cliArgs.env)).toString());
@@ -286,7 +286,7 @@ async function startCheckIn() {
         ps.dispose().then(r => process.exit(102));
     }
     if (options.applicationVHD || options.optionVHD || options.appDataVHD) {
-        await setState('11', (cliArgs.update) ? `ファイルシステムのマウント (更新)` : `ファイルシステムのマウント`)
+        await setState('11', (cliArgs.update) ? `Mount Volumes (Update)` : `Mount Game Program`)
         subar.update(10, {
             stage: "Mount Application"
         });
@@ -300,7 +300,7 @@ async function startCheckIn() {
                 if (!prepareCmd) {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Prepare Disk\x1b[0m');
-                    await errorState('0084', 'ストレージデバイスの故障');
+                    await errorState('0084', 'Storage Device Malfunctioning');
                     await ps.dispose().then(r => process.exit(102));
                 } else {
                     subar.increment();
@@ -320,13 +320,13 @@ async function startCheckIn() {
                 if (!prepareCmd) {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Prepare Disk\x1b[0m');
-                    await errorState('0084', 'ストレージデバイスの故障');
+                    await errorState('0084', 'Storage Device Malfunctioning');
                     await ps.dispose().then(r => process.exit(102));
                 }
             } else {
                 subar.stop();
                 console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Locate Disk\x1b[0m');
-                await errorState('0084', 'ストレージデバイスの故障');
+                await errorState('0084', 'Storage Device Malfunctioning');
                 ps.dispose().then(r => process.exit(101));
             }
         }
@@ -340,20 +340,20 @@ async function startCheckIn() {
                 if (!prepareCmd) {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Prepare Disk\x1b[0m');
-                    await errorState('0084', 'ストレージデバイスの故障');
+                    await errorState('0084', 'Storage Device Malfunctioning');
                     await ps.dispose().then(r => process.exit(102));
                 }
             } else {
                 subar.stop();
                 console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Locate Disk\x1b[0m');
-                await errorState('0084', 'ストレージデバイスの故障');
+                await errorState('0084', 'Storage Device Malfunctioning');
                 ps.dispose().then(r => process.exit(101));
             }
         }
         if (options.verbose) {
             console.log(`Disk Setup Complete`);
         }
-        await setState('15', `ゲームプログラムの認証`)
+        await setState('15', `Authenticate Game Program`)
         subar.update(25, {
             stage: (cliArgs.encryptSetup) ? "Encrypt Application" :"Authorize Application"
         });
@@ -385,7 +385,7 @@ async function startCheckIn() {
                 if (!unlockCmd) {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Unlock Disk\x1b[0m');
-                    await errorState('0056', 'ストレージデバイスを認証できません');
+                    await errorState('0083', 'Storage Device Not Acceptable');
                     ps.dispose().then(r => process.exit(103));
                 } else {
                     subar.increment();
@@ -396,7 +396,7 @@ async function startCheckIn() {
                 if (!unlockCmd) {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Unlock Disk\x1b[0m');
-                    await errorState('0056', 'ストレージデバイスを認証できません');
+                    await errorState('0083', 'Storage Device Not Acceptable');
                     ps.dispose().then(r => process.exit(103));
                 } else {
                     subar.increment();
@@ -407,8 +407,8 @@ async function startCheckIn() {
             const unlockKey = await getUpdatePassword({});
             if (!unlockKey) {
                 subar.stop();
-                console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Prepare Disk\x1b[0m');
-                await errorState('0084', 'ストレージデバイスの故障');
+                console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to obtain update password!\x1b[0m');
+                await errorState('0053', 'Install Media Access Failed');
                 await ps.dispose().then(r => process.exit(102));
             }
             await sleep(1100);
@@ -416,7 +416,7 @@ async function startCheckIn() {
         if (options.verbose)
             console.log(`Unlock Done`);
         subar.update(34);
-        await setState((cliArgs.update) ? '22' : '21', (cliArgs.update) ? 'アプリケーションのアップデートが進行中です' : `ゲームプログラムの起動準備中です`)
+        await setState((cliArgs.update) ? '22' : '21', (cliArgs.update) ? 'Install Program Update' : `Launch Game Program`)
         sendMessage('11');
     } else {
         // Nothing to do, Check-Out Crypto
@@ -448,7 +448,7 @@ async function postCheckIn() {
             } else if (fs.existsSync(resolve(`X:/download.ps1`))) {
                 await runCommand(`. X:/download.ps1 "${unlockPassword}"`);
             } else {
-                await errorState('0063', 'ゲームプログラムが見つかりません');
+                await errorState('0049', 'Install Media Access Failed');
                 console.error('\n\n\x1b[5m\x1b[41m\x1b[30mNo Update Application was found\x1b[0m\n');
             }
         } else {
@@ -466,7 +466,7 @@ async function postCheckIn() {
                 await errorState('0063', 'ゲームプログラムが見つかりません');
                 console.error('\n\n\x1b[5m\x1b[41m\x1b[30mNo Application was found\x1b[0m\n');
             }
-            await errorState('0010', '予期せぬ問題によりゲームプログラムが終了しました\\nサービスポタンを押すと対処方法を表示します。');
+            await errorState('0010', 'Unexpected Game Program Failure');
         }
         process.stdout.write("\n");
         await runCheckOut();
@@ -621,7 +621,7 @@ async function runAppScript(input, is_bat) {
         } else {
             args.push(`Start-Process -Wait -FilePath runas -ArgumentList '${(parseInt((release()).split('.').pop()) >= 22000) ? '/machine:amd64' : ''} /trustlevel:0x20000 "powershell.exe -File ${input} -NoProfile:$true"'`)
         }
-        await setState('30', `まもなくゲームプログラムが起動します`, true)
+        await setState('30', `Game Program Ready`, true)
         console.error('\n\x1b[42m\x1b[30mApplication Running\x1b[0m\n');
         applicationArmed = spawn("powershell.exe", args, {
             stdio: 'inherit' // Inherit the standard IO of the Node.js process
@@ -808,7 +808,7 @@ function decryptMessage(string) {
         if (options.verbose) {
             console.error("Failed to decrypt packet!");
         }
-        errorState('0008', 'キーチップアクセスの失敗');
+        errorState('0008', 'Keychip Access Failed');
     }
 }
 async function parseIncomingMessage(receivedData) {
@@ -820,13 +820,13 @@ async function parseIncomingMessage(receivedData) {
         }
         switch (receivedData.replace("KEYCHIP_FAILURE_", "")) {
             case "0001":
-                await errorState('0004', 'ゲームプログラムは受け入れられません');
+                await errorState('0004', 'Game Program Not Acceptable');
                 break;
             case "0050":
-                await errorState('0009', 'キーチップのファームウェアが古い\nファームウェアをアップデートしてください');
+                await errorState('0009', 'Keychip Firmware Invalid\\nContact SEGA for replacement');
                 break;
             default:
-                await errorState('0009', 'キーチップのハードウェアの故障');
+                await errorState('0009', 'Keychip Access Failed');
                 break;
         }
         process.exit(100);
@@ -908,7 +908,7 @@ parser.on('data', (data) => {
 port.on('error', async (err) => {
     if (options.verbose) {
         console.error(`Keychip Communication Error`, err);
-        await errorState('0008', 'キーチップアクセスの失敗');
+        await errorState('0008', 'Keychip Access Failed');
     } else if (applicationArmed) {
         if (cliArgs.forkExec)
             await runCommand('Stop-ScheduledTask -TaskName "TEMP_SOS_APP" -ErrorAction SilentlyContinue');
@@ -917,12 +917,12 @@ port.on('error', async (err) => {
         if (err.message.includes("File not found")) {
             subar.stop();
             console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip not found\x1b[0m');
-            await errorState('0001', 'キーチップが見つかりません');
+            await errorState('0001', 'Keychip Not Found');
             await sleep(5000)
         } else {
             subar.stop();
             console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Hardware Failure\x1b[0m');
-            await errorState('0009', 'キーチップのハードウェアの故障');
+            await errorState('0009', 'Keychip Access Failed');
         }
     }
     if (!applicationArmed)
@@ -940,11 +940,11 @@ port.on('close', async (err) => {
         if (err.message.includes("File not found")) {
             subar.stop();
             console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Removal\x1b[0m');
-            await errorState('0001', 'キーチップが見つかりません');
+            await errorState('0001', 'Keychip Not Found');
         } else {
             subar.stop();
             console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Hardware Failure\x1b[0m');
-            await errorState('0009', 'キーチップのハードウェアの故障');
+            await errorState('0009', 'Keychip Access Failed');
         }
     }
     if (!applicationArmed)
@@ -959,7 +959,7 @@ port.on('open', async () => {
         if (options.verbose) {
             console.log(`Prepare Host`);
         }
-        await setState('3', `システムの設定`)
+        await setState('3', `Preparing System`)
         subar.update(3, {
             stage: "Preparing System"
         });
@@ -985,7 +985,7 @@ port.on('open', async () => {
     subar.update(4, {
         stage: "Preparing Keychip"
     });
-    await setState('4', `キーチップとの通信`)
+    await setState('4', `Keychip Login`)
     if (!options.dontCleanup) {
         await runCommand('Get-Disk -FriendlyName "Msft Virtual Disk" -ErrorAction SilentlyContinue | ForEach-Object { Dismount-DiskImage -DevicePath $_.Path -Confirm:$false } | Out-Null', false);
     }
