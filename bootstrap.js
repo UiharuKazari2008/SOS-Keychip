@@ -1,4 +1,4 @@
-const application_version = 2.21;
+const application_version = 3.2;
 const expected_crypto_version = 2;
 const min_firmware_version = 2.3;
 process.stdout.write(
@@ -25,12 +25,13 @@ process.stdout.write(
     `\x1b[36mSavior of Song Keychip\x1b[0m \x1b[31mv${application_version}\x1b[0m\nby \x1b[35mKazari\x1b[0m\n\n`);
 
 const fs = require('fs');
-const {SerialPort, ReadlineParser} = require('serialport');
+const ini = require('ini');
+const { SerialPort, ReadlineParser } = require('serialport');
 const yargs = require('yargs/yargs')
-const {hideBin} = require('yargs/helpers');
-const {spawn} = require('child_process');
-const {PowerShell} = require("node-powershell");
-const {resolve, join} = require("path");
+const { hideBin } = require('yargs/helpers');
+const { spawn } = require('child_process');
+const { PowerShell } = require("node-powershell");
+const { resolve, join, basename, dirname } = require("path");
 const crypto = require('crypto-js');
 const sleep = (waitTimeInMs) => new Promise(resolve => setTimeout(resolve, waitTimeInMs));
 const cliProgress = require('cli-progress');
@@ -44,6 +45,10 @@ const cliArgs = yargs(hideBin(process.argv))
         alias: 'c',
         type: 'string',
         description: 'Keychip Serial Port\nCOM5 is default port'
+    })
+    .option('swMode', {
+        type: 'boolean',
+        description: 'Use Software Keychip'
     })
     .option('verbose', {
         alias: 'v',
@@ -73,6 +78,11 @@ const cliArgs = yargs(hideBin(process.argv))
         type: 'string',
         description: 'Options Disk Image (Z:\\)'
     })
+    .option('appIni', {
+        alias: 'i',
+        type: 'string',
+        description: 'Applications INI file to be used for networking and keychip pass-trough'
+    })
 
     .option('env', {
         alias: 'e',
@@ -88,6 +98,10 @@ const cliArgs = yargs(hideBin(process.argv))
     .option('forkExec', {
         type: 'bool',
         description: 'Fork the application as another child process in the event that the application is malfunctioning being launched the normal way'
+    })
+    .option('restrictExec', {
+        type: 'bool',
+        description: 'Run Application with Restricted Permissions (Created new window)'
     })
     .option('applicationExec', {
         type: 'string',
@@ -107,6 +121,25 @@ const cliArgs = yargs(hideBin(process.argv))
         alias: 'q',
         type: 'string',
         description: 'PS1 Script to execute right before exiting keychip'
+    })
+
+    .option('networkDriver', {
+        alias: 'h',
+        type: 'string',
+        description: 'Haruna Network Driver (or other applicable)'
+    })
+    .option('networkConfig', {
+        alias: 'n',
+        type: 'string',
+        description: 'Network Driver configFile Value'
+    })
+    .option('netPrepScript', {
+        type: 'string',
+        description: 'Network Prepare Script'
+    })
+    .option('netCleanScript', {
+        type: 'string',
+        description: 'Network Cleanup Script'
     })
 
     .option('update', {
@@ -132,6 +165,10 @@ const cliArgs = yargs(hideBin(process.argv))
     .option('displayState', {
         type: 'string',
         description: 'state.txt file used by "A.S.R."'
+    })
+    .option('logFile', {
+        type: 'string',
+        description: 'Log file for powershell transactions'
     })
     .argv
 
@@ -164,10 +201,19 @@ const sdbar = new cliProgress.SingleBar({
     barIncompleteChar: '\u2591',
     hideCursor: true
 });
-subar.start(35, 0, {
+subar.start(36, 0, {
     stage: "Initialization"
 });
 setState('1', `Boot`)
+
+let software_mode = cliArgs.swMode || false;
+let knox_mode = false;
+let returned_key = null;
+let keychip_id = null;
+let keychip_version = [0, 0, null];
+let ready = false;
+let applicationArmed = false;
+let encryptedMode = !!(cliArgs.shutdown);
 
 if (cliArgs.env && fs.existsSync(resolve(cliArgs.env))) {
     secureOptions = JSON.parse(fs.readFileSync(resolve(cliArgs.env)).toString());
@@ -182,6 +228,7 @@ options = {
     loginKey: secureOptions.login_key || options.login_key,
     loginIV: secureOptions.login_iv || options.login_iv,
     applicationID: secureOptions.id || options.id,
+    applicationINI: cliArgs.appIni || options.ini,
     applicationVHD: cliArgs.applicationVHD || options.app,
     appDataVHD: cliArgs.appDataVHD || options.appdata,
     optionVHD: cliArgs.optionVHD || options.option,
@@ -190,6 +237,10 @@ options = {
     cleanupScript: cliArgs.cleanupScript || options.cleanup_script,
     shutdownScript: cliArgs.shutdownScript || options.shutdown_script,
     dontCleanup: cliArgs.dontCleanup || options.no_dismount_vhds,
+    networkDriver: cliArgs.networkDriver || options.network_driver,
+    networkConfig: cliArgs.networkConfig || options.network_config,
+    netPrepareScript: cliArgs.netPrepScript || options.network_start_script,
+    netShutdownScript: cliArgs.netCleanScript || options.network_stop_script,
 };
 if (cliArgs.auth) {
     // XXXX KEY IV
@@ -198,12 +249,15 @@ if (cliArgs.auth) {
         if (!authString)
             throw new Error('No String');
         const authArray = authString.split(' ');
-        if (authArray.length !== 3)
+        if (authArray.length !== ((software_mode) ? 4 : 3))
             throw new Error('Invalid Auth String Format');
 
         options.applicationID = authArray[0];
         options.loginKey = authArray[1];
         options.loginIV = authArray[2];
+        if (software_mode) {
+            keychip_id = authArray[3];
+        }
     } catch (err) {
         subar.stop();
         if (options.verbose) {
@@ -242,25 +296,23 @@ if (options.verbose)
 
 
 setInterval(() => {
-    process.title = `ARS NOVA I-401 Keychip [${options.applicationID}]`;
+    process.title = `ARS NOVA I-401 Keychip (${(software_mode) ? 'Software Mode' : 'via ' + options.port }) [${options.applicationID || 'Invalid'}]`;
 }, 100);
 
-const port = new SerialPort({path: options.port, baudRate: 4800});
-const parser = port.pipe(new ReadlineParser({delimiter: '\n'}));
+let port = null;
+let parser = null;
+if (!software_mode) {
+    port = new SerialPort({path: options.port, baudRate: 4800});
+    parser = port.pipe(new ReadlineParser({delimiter: '\n'}));
+}
 subar.increment();
 
-let returned_key = null;
-let keychip_id = null;
-let keychip_version = [0, 0, null];
-let ready = false;
-let applicationArmed = false;
-let encryptedMode = !!(cliArgs.shutdown);
 let currentKey = options.loginKey;
 let currentIV = options.loginIV;
 
 async function startCheckIn() {
     ready = true;
-    if (parseFloat(keychip_version[0]) < min_firmware_version) {
+    if (!software_mode && parseFloat(keychip_version[0]) < min_firmware_version) {
         subar.stop();
         if (options.verbose) {
             console.error(`Firmware "${keychip_version[0]}" is outdated, please flash the latest version!`);
@@ -268,9 +320,9 @@ async function startCheckIn() {
             console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Firmware Outdated\x1b[0m');
         }
         sendMessage('0');
-        ps.dispose().then(r => process.exit(102));
+        await exitAction(102);
     }
-    if (parseFloat(keychip_version[1]) !== expected_crypto_version) {
+    if (!software_mode && parseFloat(keychip_version[1]) !== expected_crypto_version) {
         subar.stop();
         if (options.verbose) {
             console.error(`Disk Decryption Scheme (${keychip_version[1]} != ${expected_crypto_version}) Mismatch!`);
@@ -283,7 +335,7 @@ async function startCheckIn() {
             console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Crypto Incompatible\x1b[0m');
         }
         sendMessage('0');
-        ps.dispose().then(r => process.exit(102));
+        await exitAction(102);
     }
     if (options.applicationVHD || options.optionVHD || options.appDataVHD) {
         await setState('11', (cliArgs.update) ? `Mount Volumes (Update)` : `Mount Game Program`)
@@ -301,13 +353,13 @@ async function startCheckIn() {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Prepare Disk\x1b[0m');
                     await errorState('0084', 'Storage Device Malfunctioning');
-                    await ps.dispose().then(r => process.exit(102));
+                    await exitAction(102);
                 } else {
                     subar.increment();
                 }
             } else {
                 subar.increment();
-                await ps.dispose().then(r => process.exit(101));
+                await exitAction(101);
             }
         }
         if (options.optionVHD) {
@@ -321,13 +373,13 @@ async function startCheckIn() {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Prepare Disk\x1b[0m');
                     await errorState('0084', 'Storage Device Malfunctioning');
-                    await ps.dispose().then(r => process.exit(102));
+                    await exitAction(102);
                 }
             } else {
                 subar.stop();
                 console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Locate Disk\x1b[0m');
                 await errorState('0084', 'Storage Device Malfunctioning');
-                ps.dispose().then(r => process.exit(101));
+                await exitAction(101);
             }
         }
         if (options.appDataVHD) {
@@ -341,18 +393,19 @@ async function startCheckIn() {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Prepare Disk\x1b[0m');
                     await errorState('0084', 'Storage Device Malfunctioning');
-                    await ps.dispose().then(r => process.exit(102));
+                    await exitAction(102);
                 }
             } else {
                 subar.stop();
                 console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Locate Disk\x1b[0m');
                 await errorState('0084', 'Storage Device Malfunctioning');
-                ps.dispose().then(r => process.exit(101));
+                await exitAction(101);
             }
         }
         if (options.verbose) {
             console.log(`Disk Setup Complete`);
         }
+
         await setState('15', `Authenticate Game Program`)
         subar.update(25, {
             stage: (cliArgs.encryptSetup) ? "Encrypt Application" :"Authorize Application"
@@ -364,7 +417,7 @@ async function startCheckIn() {
                 if (!encryptCmd) {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Encrypt Disk\x1b[0m');
-                    ps.dispose().then(r => process.exit(99));
+                    await exitAction(99);
                 } else {
                     subar.increment();
                 }
@@ -374,7 +427,7 @@ async function startCheckIn() {
                 if (!encryptCmd) {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Encrypt Disk\x1b[0m');
-                    ps.dispose().then(r => process.exit(99));
+                    await exitAction(99);
                 } else {
                     subar.increment();
                 }
@@ -386,7 +439,7 @@ async function startCheckIn() {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Unlock Disk\x1b[0m');
                     await errorState('0083', 'Storage Device Not Acceptable');
-                    ps.dispose().then(r => process.exit(103));
+                    await exitAction(103);
                 } else {
                     subar.increment();
                 }
@@ -397,7 +450,7 @@ async function startCheckIn() {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Unlock Disk\x1b[0m');
                     await errorState('0083', 'Storage Device Not Acceptable');
-                    ps.dispose().then(r => process.exit(103));
+                    await exitAction(103);
                 } else {
                     subar.increment();
                 }
@@ -409,40 +462,74 @@ async function startCheckIn() {
                 subar.stop();
                 console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to obtain update password!\x1b[0m');
                 await errorState('0053', 'Install Media Access Failed');
-                await ps.dispose().then(r => process.exit(102));
+                await exitAction(102);
             }
             await sleep(1100);
         }
         if (options.verbose)
             console.log(`Unlock Done`);
         subar.update(34);
-        await setState((cliArgs.update) ? '22' : '21', (cliArgs.update) ? 'Install Program Update' : `Launch Game Program`)
-        sendMessage('11');
+        if (software_mode) {
+            await injectKeychipID();
+            subar.increment();
+            postCheckIn();
+        } else {
+            sendMessage('11');
+        }
     } else {
         // Nothing to do, Check-Out Crypto
         setTimeout(() => {
-            sendMessage('0');
-            ps.dispose().then(r => process.exit(1));
+            if (!software_mode)
+                sendMessage('0');
+            exitAction(1);
         }, 1000);
     }
 }
 async function postCheckIn() {
     if (cliArgs.editMode || cliArgs.encryptSetup) {
-        subar.update(35, {
+        subar.update(36, {
             stage: "Detach Keychip"
         });
         clearTimeout(watchdog);
-        sendMessage("2");
+        if (!software_mode)
+            sendMessage("2");
+        exitAction(0);
     } else if (!cliArgs.shutdown) {
+        if (options.networkDriver) {
+            await setState('14', `Setup For Network`);
+            subar.update(35, {
+                stage: "Configure Network Driver"
+            });
+            if (options.verbose) {
+                console.log(`Setup Network Driver`);
+            }
+            async function startDriver() {
+                let args = [];
+                if (options.netPrepareScript)
+                    args.push(`. ${resolve(options.netPrepareScript)}; `);
+                args.push(`Start-Process -Wait -WindowStyle Minimized -FilePath "${resolve(options.networkDriver)}" -ArgumentList '--configFile "${options.networkConfig}" ${(options.applicationINI) ? '--iniFile "' + dirname(options.applicationINI) + '"' : ''}'; `);
+                const initStart = PowerShell.command(args);
+                networkDriver = await psUtility.invoke(initStart);
+                networkOk = false;
+                startDriver();
+            }
+            startDriver();
+            await sleep(5000);
+        }
+
         if (options.verbose) {
             console.log(`Launch App`);
         }
-        subar.update(35, {
+        await setState((cliArgs.update) ? '22' : '21', (cliArgs.update) ? 'Install Program Update' : `Launch Game Program`)
+        subar.update(36, {
             stage: (cliArgs.update) ? "Update Application" : "Launch Application"
         });
         await sleep(100);
         subar.stop();
-        if (cliArgs.update) {
+        if (!networkOk) {
+            enableNetworkDriver = false;
+            await errorState('8002', 'Network setting error (SYSTEM)');
+        } else if (cliArgs.update) {
             if (fs.existsSync(resolve(`X:/update.ps1`))) {
                 await runCommand(`. X:/update.ps1  "${unlockPassword}"`);
             } else if (fs.existsSync(resolve(`X:/download.ps1`))) {
@@ -455,24 +542,30 @@ async function postCheckIn() {
             if (options.applicationExec) {
                 if (fs.existsSync(resolve(`X:/${options.applicationExec}`))) {
                     await runAppScript(`X:/${options.applicationExec}`, options.applicationExec.endsWith('.bat'));
+                    await errorState('0010', 'Unexpected Game Program Failure');
+                } else {
+                    await errorState('0022', 'Game Program Not Found on Storage Device');
                 }
             } else if (fs.existsSync(resolve(`X:/game.ps1`))) {
                 await runAppScript(`X:/game.ps1`);
+                await errorState('0010', 'Unexpected Game Program Failure');
             } else if (fs.existsSync(resolve(`X:/bin/game.bat`))) {
                 await runAppScript(`X:/bin/game.bat`, true);
+                await errorState('0010', 'Unexpected Game Program Failure');
             } else if (fs.existsSync(resolve(`X:/bin/start.bat`))) {
                 await runAppScript(`X:/bin/start.bat`, true);
+                await errorState('0010', 'Unexpected Game Program Failure');
             } else {
-                await errorState('0063', 'ゲームプログラムが見つかりません');
+                await errorState('0022', 'Game Program Not Found on Storage Device');
                 console.error('\n\n\x1b[5m\x1b[41m\x1b[30mNo Application was found\x1b[0m\n');
             }
-            await errorState('0010', 'Unexpected Game Program Failure');
         }
         process.stdout.write("\n");
         await runCheckOut();
     }
 }
 async function runCheckOut() {
+    enableNetworkDriver = false;
     subar.stop();
     sdbar.start(11,0, {
         stage: "Application Terminated"
@@ -497,6 +590,13 @@ async function runCheckOut() {
             })
         })
         sdbar.increment();
+    }
+    if (options.applicationINI && fs.existsSync(resolve(options.applicationINI))) {
+        const _sg = fs.readFileSync(resolve(options.applicationINI), 'utf-8');
+        let st_cfg = ini.parse(_sg.toString());
+        delete st_cfg['keychip']['id'];
+        const _st_string = ini.stringify(st_cfg);
+        fs.writeFileSync(resolve(options.applicationINI), _st_string);
     }
     sdbar.update(2, {
         stage: "Dismount Application"
@@ -528,26 +628,46 @@ async function runCheckOut() {
     sdbar.update(9, {
         stage: "Release Keychip"
     })
-    sendMessage('0');
-    if (options.cleanupScript) {
+    if (!software_mode)
+        sendMessage('0');
+    if (options.cleanupScript || options.netShutdownScript) {
         sdbar.update(10, {
             stage: "Cleanup System"
         })
-        await new Promise((ok) => {
-            const prepare = spawn('powershell.exe', ['-File', resolve(options.cleanupScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
-                stdio: 'inherit', // Inherit the standard IO of the Node.js process
-                workingDirectory: process.cwd(),
-            });
-            prepare.on('exit', function () {
-                ok()
+        if (options.cleanupScript) {
+            await new Promise((ok) => {
+                const prepare = spawn('powershell.exe', ['-File', resolve(options.cleanupScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+                    stdio: 'inherit', // Inherit the standard IO of the Node.js process
+                    workingDirectory: process.cwd(),
+                });
+                prepare.on('exit', function () {
+                    ok()
+                })
+                prepare.on('close', function () {
+                    ok()
+                })
+                prepare.on('end', function () {
+                    ok()
+                })
             })
-            prepare.on('close', function () {
-                ok()
+        }
+        if (options.netShutdownScript) {
+            await new Promise((ok) => {
+                const prepare = spawn('powershell.exe', ['-File', resolve(options.netShutdownScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+                    stdio: 'inherit', // Inherit the standard IO of the Node.js process
+                    workingDirectory: process.cwd(),
+                });
+                prepare.on('exit', function () {
+                    ok()
+                })
+                prepare.on('close', function () {
+                    ok()
+                })
+                prepare.on('end', function () {
+                    ok()
+                })
             })
-            prepare.on('end', function () {
-                ok()
-            })
-        })
+        }
         sdbar.increment();
     }
     sdbar.update(11, {
@@ -558,8 +678,8 @@ async function runCheckOut() {
     }
     sdbar.stop();
     setTimeout(() => {
-        ps.dispose().then(r => process.exit(0));
-    }, 1000);
+        exitAction(0);
+    }, 10000);
 }
 
 const ps = new PowerShell({
@@ -568,7 +688,31 @@ const ps = new PowerShell({
         '-NoProfile': true,
     },
 });
+const psUtility = new PowerShell({
+    executableOptions: {
+        '-ExecutionPolicy': 'Bypass',
+        '-NoProfile': true,
+    },
+});
+(async () => {
+    if (cliArgs.logFile) {
+        await ps.invoke(PowerShell.command([`Start-Transcript -Path ${resolve(cliArgs.logFile)} -Append`]));
+        await psUtility.invoke(PowerShell.command([`Start-Transcript -Path ${resolve(cliArgs.logFile)} -Append`]));
+    }
+})()
+let networkDriver = null;
+let enableNetworkDriver = true;
+let networkOk = true;
 
+async function exitAction(code) {
+    if (cliArgs.logFile) {
+        await ps.invoke(PowerShell.command([`Stop-Transcript`]));
+        await psUtility.invoke(PowerShell.command([`Stop-Transcript`]));
+    }
+    await ps.dispose();
+    await psUtility.dispose();
+    await process.exit(code);
+}
 async function runCommand(input, suppressOutput = false) {
     return new Promise(async ok => {
         try {
@@ -593,7 +737,7 @@ async function createTask(exec, is_bat, workingDir, suppressOutput = false) {
             const printCommand = PowerShell.command([
                 `Unregister-ScheduledTask -TaskName "TEMP_SOS_APP" -Confirm:$false -ErrorAction SilentlyContinue; `,
                 `Register-ScheduledTask -TaskName TEMP_SOS_APP -Xml (Get-Content -Raw -Path "${resolve(join(tmpdir(), 'job.xml'))}") -ErrorAction Stop; `,
-                `Set-ScheduledTask -TaskName 'TEMP_SOS_APP' -Action (New-ScheduledTaskAction -Execute '${(is_bat) ? 'cmd.exe' : 'powershell.exe'}' -Argument '${(is_bat) ? '/c' : '-NoProfile -ExecutionPolicy Bypass -File'} "${exec}"' -WorkingDirectory "${workingDir}")`,
+                `Set-ScheduledTask -TaskName 'TEMP_SOS_APP' -Action (New-ScheduledTaskAction -Execute '${(is_bat) ? 'cmd.exe' : 'powershell.exe'}' -Argument '${(is_bat) ? '/c' : '-NoProfile -WindowStyle Minimized -ExecutionPolicy Bypass -File'} "${exec}"' -WorkingDirectory "${workingDir}")`,
             ]);
             const result = await ps.invoke(printCommand);
             if (options.verbose && (!suppressOutput || result.hadErrors)) {
@@ -616,10 +760,17 @@ async function runAppScript(input, is_bat) {
         if (cliArgs.forkExec) {
             await createTask(input, is_bat, process.cwd());
             args.push(`Start-ScheduledTask -TaskName "TEMP_SOS_APP"; While ((Get-ScheduledTask -TaskName "TEMP_SOS_APP").State -eq "Running") { Sleep -Seconds 1 }`)
-        } else if (is_bat) {
-            args.push(`Start-Process -Wait -WindowStyle Minimized -FilePath runas -ArgumentList '${(parseInt(release().split('.').pop()) >= 22000) ? '/machine:amd64' : ''} /trustlevel:0x20000 "cmd.exe /c ${input}"'`)
+        } else if (cliArgs.restrictExec) {
+            if (is_bat) {
+                args.push(`Start-Process -Wait -WindowStyle Minimized -FilePath runas -ArgumentList '${(parseInt(release().split('.').pop()) >= 22000) ? '/machine:amd64' : ''} /trustlevel:0x20000 "cmd.exe /c ${input}"'`)
+            } else {
+                args.push(`Start-Process -Wait -WindowStyle Minimized -FilePath runas -ArgumentList '${(parseInt((release()).split('.').pop()) >= 22000) ? '/machine:amd64' : ''} /trustlevel:0x20000 "powershell.exe -File ${input} -NoProfile:$true"'`)
+            }
         } else {
-            args.push(`Start-Process -Wait -FilePath runas -ArgumentList '${(parseInt((release()).split('.').pop()) >= 22000) ? '/machine:amd64' : ''} /trustlevel:0x20000 "powershell.exe -File ${input} -NoProfile:$true"'`)
+            args = [
+                ((is_bat) ? 'cmd.exe' : 'powershell.exe'),
+                ...((is_bat) ? ['/c', input] : ['-File', input, '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'])
+            ];
         }
         await setState('30', `Game Program Ready`, true)
         console.error('\n\x1b[42m\x1b[30mApplication Running\x1b[0m\n');
@@ -677,12 +828,17 @@ async function unlockDisk(o) {
         subar.increment();
     }
     returned_key = null;
-    // Request the keychip to give decryption key for applicationID with a diskNumber
-    const challangeCmd = `10:${options.applicationID}:${o.diskNumber}:`;
-    sendMessage(challangeCmd);
-    // Wait inline for response
-    while (!returned_key) {
-        await sleep(5);
+    if (software_mode) {
+        const challangeString = `${options.applicationID} Copyright(C)SEGA ${options.loginIV} DISK ${o.diskNumber} `
+        returned_key = await hashPassword(challangeString);
+    } else {
+        // Request the keychip to give decryption key for applicationID with a diskNumber
+        const challangeCmd = `10:${options.applicationID}:${o.diskNumber}:`;
+        sendMessage(challangeCmd);
+        // Wait inline for response
+        while (!returned_key) {
+            await sleep(5);
+        }
     }
     // Unlock bitlocker disk or folder
     if (options.verbose) {
@@ -692,7 +848,7 @@ async function unlockDisk(o) {
     }
     const unlockCmd = await runCommand(`Unlock-BitLocker -MountPoint "${o.mountPoint}" -Password $(ConvertTo-SecureString -String "${returned_key}" -AsPlainText -Force) -Confirm:$false -ErrorAction Stop`);
     returned_key = null;
-    await sleep(1000);
+    await sleep(1250);
     return (unlockCmd);
 }
 async function getUpdatePassword(o) {
@@ -702,12 +858,17 @@ async function getUpdatePassword(o) {
         subar.increment();
     }
     returned_key = null;
-    // Request the keychip to give decryption key for applicationID with a diskNumber
-    const challangeCmd = `10:${options.applicationID}:9:`;
-    sendMessage(challangeCmd);
-    // Wait inline for response
-    while (!returned_key) {
-        await sleep(5);
+    if (software_mode) {
+        const challangeString = `${options.applicationID} Copyright(C)SEGA ${options.loginIV} DISK 9 `
+        returned_key = await hashPassword(challangeString);
+    } else {
+        // Request the keychip to give decryption key for applicationID with a diskNumber
+        const challangeCmd = `10:${options.applicationID}:9:`;
+        sendMessage(challangeCmd);
+        // Wait inline for response
+        while (!returned_key) {
+            await sleep(5);
+        }
     }
     if (options.verbose) {
         console.log(`\n\n"${returned_key}"\n\n`)
@@ -724,15 +885,21 @@ async function encryptDisk(o) {
         subar.increment();
     }
     returned_key = null;
+    if (software_mode) {
+        const challangeString = `${options.applicationID} Copyright(C)SEGA ${options.loginIV} DISK ${o.diskNumber} `
+        returned_key = await hashPassword(challangeString);
+    } else {
     // Request the keychip to give decryption key for applicationID with a ivString and diskNumber
     sendMessage(`10:${options.applicationID}:${o.diskNumber}:`);
     // Wait inline for response
     while (!returned_key) {
         await sleep(5);
     }
+    }
     // Unlock bitlocker disk or folder
     if (options.verbose) {
         console.log(`Key Encrypt ${o.diskNumber}`);
+        console.log(returned_key);
     } else {
         subar.increment();
     }
@@ -741,8 +908,32 @@ async function encryptDisk(o) {
     await sleep(1000);
     return (unlockCmd);
 }
+async function injectKeychipID() {
+    if (options.applicationINI && fs.existsSync(resolve(options.applicationINI))) {
+        const _sg = fs.readFileSync(resolve(options.applicationINI), 'utf-8');
+        let st_cfg = ini.parse(_sg.toString());
+        st_cfg['keychip']['id'] = keychip_id;
+        const _st_string = ini.stringify(st_cfg);
+        fs.writeFileSync(resolve(options.applicationINI), _st_string);
+    }
+    if (options.verbose) {
+        console.log(`Keychip ID: ${keychip_id}`);
+    }
+}
+async function hashPassword(inputString) {
+    const encrypted = await crypto.AES.encrypt(
+        inputString,
+        crypto.enc.Hex.parse(options.loginKey),
+        {
+            iv: crypto.enc.Hex.parse(options.loginIV),
+            mode: crypto.mode.CBC,
+            padding: crypto.pad.ZeroPadding
+        }
+    );
+    return (crypto.SHA256(encrypted.ciphertext.toString(crypto.enc.Base64))).toString().toUpperCase();
+}
 
-function sendMessage(message) {
+    function sendMessage(message) {
     if (encryptedMode) {
         const messageBytes = crypto.AES.encrypt(
             `SG_ENCMSG ${message}`,
@@ -762,236 +953,310 @@ function sendMessage(message) {
         port.write(`@${message}!`);
     }
 }
-function decryptMessage(string) {
-    try {
-        if (string.length > 2) {
-            const ripped_str = string.split(":");
-            if (ripped_str.length === 2) {
-                let message = null;
-                ripped_str.map(s => {
-                    const encryptedBytes = crypto.enc.Base64.parse(s);
-                    const decryptedBytes = crypto.AES.decrypt(
-                        {ciphertext: encryptedBytes},
-                        crypto.enc.Hex.parse(currentKey),
-                        {
-                            iv: crypto.enc.Hex.parse(currentIV),
-                            mode: crypto.mode.CBC, // Use the appropriate mode based on Arduino's implementation
-                            padding: crypto.pad.ZeroPadding   // Use the appropriate padding based on Arduino's implementation
-                        }
-                    );
-                    let decryptedText = (crypto.enc.Utf8.stringify(decryptedBytes)).trim().split('\r')[0].split('\n')[0];
-                    decryptedText = decryptedText.split(" ");
-                    if (decryptedText.length > 2) {
-                        if (decryptedText[0] === 'SG_KEYCRC') {
-                            currentKey = decryptedText[1];
-                            currentIV = decryptedText[2];
-                            if (options.verbose) {
-                                console.log('   <<<[KEY CYCLE] Key: ' + currentKey + ' - IV: ' + currentIV);
-                            }
-                        } else {
-                            if (options.verbose && decryptedText[1] !== "SG_HELLO") {
-                                console.log(`   <<<[MSG DECRYPT] ${decryptedText[1]}`)
-                            }
-                            message = decryptedText[1];
-                        }
-                    }
-                })
-                if (message)
-                    parseIncomingMessage(message);
-            } else {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    } catch (e) {
-        if (options.verbose) {
-            console.error("Failed to decrypt packet!");
-        }
-        errorState('0008', 'Keychip Access Failed');
-    }
+
+if (!(options.applicationID && options.loginKey && options.loginIV)) {
+    subar.stop();
+    console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip not found\x1b[0m');
+    (async () => {
+        await errorState('0001', 'Keychip Not Found');
+        exitAction(240);
+        await sleep(5000)
+    })()
 }
-async function parseIncomingMessage(receivedData) {
-    if (receivedData.startsWith('KEYCHIP_FAILURE_')) {
-        if (options.verbose) {
-            console.error(`Keychip is locked out, Press reset button or reconnect`);
-        } else {
-            console.error(`\nHardware Failure ${receivedData.replace("KEYCHIP_FAILURE_", "")}`);
+
+if (software_mode) {
+    (async () => {
+        if (!software_mode) {
+            await runCommand('Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Confirm:$false -ErrorAction SilentlyContinue | Out-Null', true);
         }
-        switch (receivedData.replace("KEYCHIP_FAILURE_", "")) {
-            case "0001":
-                await errorState('0004', 'Game Program Not Acceptable');
-                break;
-            case "0050":
-                await errorState('0009', 'Keychip Firmware Invalid\\nContact SEGA for replacement');
-                break;
-            default:
-                await errorState('0009', 'Keychip Access Failed');
-                break;
-        }
-        process.exit(100);
-    } else if (receivedData === 'SG_HELLO' && (applicationArmed !== false && !(cliArgs.editMode && cliArgs.shutdown && cliArgs.encryptMode))) {
-        lastCheckIn = new Date().valueOf();
-        clearTimeout(dropOutTimer);
-        dropOutTimer = setTimeout(async () => {
+        subar.increment();
+        if (options.prepareScript) {
             if (options.verbose) {
-                console.error(`Keychip Checkin Failed`);
+                console.log(`Prepare Host`);
             }
-            if (applicationArmed !== false) {
-                if (cliArgs.forkExec)
-                    await runCommand('Stop-ScheduledTask -TaskName "TEMP_SOS_APP" -ErrorAction SilentlyContinue');
-                applicationArmed.kill("SIGINT");
-            } else {
-                ps.dispose().then(r => process.exit(1));
-            }
-        }, 5000)
-    } else if (receivedData === 'SG_HELLO' && ready === false) {
+            await setState('3', `Preparing System`)
+            subar.update(3, {
+                stage: "Preparing System"
+            });
+
+            await new Promise((ok) => {
+                const prepare = spawn('powershell.exe', ['-File', resolve(options.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+                    stdio: 'inherit', // Inherit the standard IO of the Node.js process
+                    workingDirectory: process.cwd(),
+                });
+                prepare.on('exit', function () {
+                    ok()
+                })
+                prepare.on('close', function () {
+                    ok()
+                })
+                prepare.on('end', function () {
+                    ok()
+                })
+            })
+        }
+        if (options.verbose) {
+            console.log(`Software Keychip Emulator Mode`);
+        }
+        subar.update(4, {
+            stage: "Preparing Keychip"
+        });
+        await setState('4', `Keychip Login`)
+        if (!options.dontCleanup) {
+            await runCommand('Get-Disk -FriendlyName "Msft Virtual Disk" -ErrorAction SilentlyContinue | ForEach-Object { Dismount-DiskImage -DevicePath $_.Path -Confirm:$false } | Out-Null', false);
+        }
+        await sleep(200);
         if (options.verbose) {
             console.log(`Ready`);
         }
-        subar.increment();
         if (cliArgs.shutdown) {
-            subar.update(35, {
+            subar.update(36, {
                 stage: "Shutdown Request",
             });
             runCheckOut();
         } else {
-            port.write('@5!');
-            sleep(100).then(() => {
-                port.write(`@6:${options.applicationID}:!`);
-            });
+            await startCheckIn();
         }
-    } else if (receivedData === 'SG_LV1_RESET' || receivedData === 'SG_LV1_GOODBYE') {
-        ps.dispose().then(r => process.exit(0));
-    } else if (receivedData === 'SG_LV0_GOODBYE') {
-        sendMessage(`1`);
-    } else if (receivedData === 'SG_ENC_READY') {
-        if (options.verbose) {
-            console.log(`Switching to Encrypted Mode`);
+    })()
+} else {
+    let dropOutTimer = null;
+    let lastCheckIn = null;
+
+    function decryptMessage(string) {
+        try {
+            if (string.length > 2) {
+                const ripped_str = string.split(":");
+                if (ripped_str.length === 2) {
+                    let message = null;
+                    ripped_str.map(s => {
+                        const encryptedBytes = crypto.enc.Base64.parse(s);
+                        const decryptedBytes = crypto.AES.decrypt(
+                            {ciphertext: encryptedBytes},
+                            crypto.enc.Hex.parse(currentKey),
+                            {
+                                iv: crypto.enc.Hex.parse(currentIV),
+                                mode: crypto.mode.CBC, // Use the appropriate mode based on Arduino's implementation
+                                padding: crypto.pad.ZeroPadding   // Use the appropriate padding based on Arduino's implementation
+                            }
+                        );
+                        let decryptedText = (crypto.enc.Utf8.stringify(decryptedBytes)).trim().split('\r')[0].split('\n')[0];
+                        decryptedText = decryptedText.split(" ");
+                        if (decryptedText.length > 2) {
+                            if (decryptedText[0] === 'SG_KEYCRC') {
+                                currentKey = decryptedText[1];
+                                currentIV = decryptedText[2];
+                                if (options.verbose) {
+                                    console.log('   <<<[KEY CYCLE] Key: ' + currentKey + ' - IV: ' + currentIV);
+                                }
+                            } else {
+                                if (options.verbose && decryptedText[1] !== "SG_HELLO") {
+                                    console.log(`   <<<[MSG DECRYPT] ${decryptedText[1]}`)
+                                }
+                                message = decryptedText[1];
+                            }
+                        }
+                    })
+                    if (message)
+                        parseIncomingMessage(message);
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        } catch (e) {
+            if (options.verbose) {
+                console.error("Failed to decrypt packet!");
+            }
+            errorState('0008', 'Keychip Access Failed');
         }
-        subar.increment();
-        encryptedMode = true;
-    } else if (receivedData.startsWith("SG_UNLOCK")) {
-        subar.increment();
-        if (!cliArgs.shutdown) {
-            startCheckIn();
-        }
-    } else if (receivedData.startsWith("CRYPTO_KEY_")) {
-        returned_key = receivedData.substring(11).trim().split("x0")[0];
-    } else if (receivedData.startsWith("KEYCHIP_ID_")) {
-        keychip_id = receivedData.substring(11).trim();
-        if (options.verbose) {
-            console.log(`Keychip ID: ${keychip_id}`);
-        }
-        subar.increment();
-        postCheckIn();
-    } else if (receivedData.startsWith("FIRMWARE_VER_")) {
-        keychip_version = receivedData.split(' ').map(e => e.split('_VER_').pop());
-        if (options.verbose) {
-            console.log(`Keychip Version: ${keychip_version.join('-')}`);
-        }
-        subar.increment();
     }
+    async function parseIncomingMessage(receivedData) {
+        if (receivedData.startsWith('KEYCHIP_FAILURE_')) {
+            if (options.verbose) {
+                console.error(`Keychip is locked out, Press reset button or reconnect`);
+            } else {
+                console.error(`\nHardware Failure ${receivedData.replace("KEYCHIP_FAILURE_", "")}`);
+            }
+            switch (receivedData.replace("KEYCHIP_FAILURE_", "")) {
+                case "0001":
+                    await errorState('0004', 'Game Program Not Acceptable');
+                    break;
+                case "0050":
+                    await errorState('0009', 'Keychip Firmware Invalid\\nContact OPs for assistance');
+                    break;
+                default:
+                    await errorState('0009', 'Keychip Access Failed');
+                    break;
+            }
+            process.exit(100);
+        } else if (receivedData === 'SG_HELLO' && (applicationArmed !== false && !(cliArgs.editMode && cliArgs.shutdown && cliArgs.encryptMode))) {
+            lastCheckIn = new Date().valueOf();
+            clearTimeout(dropOutTimer);
+            if (knox_mode) {
+                dropOutTimer = setTimeout(async () => {
+                    if (options.verbose) {
+                        console.error(`Keychip Checkin Failed`);
+                    }
+                    if (applicationArmed !== false) {
+                        if (cliArgs.forkExec)
+                            await runCommand('Stop-ScheduledTask -TaskName "TEMP_SOS_APP" -ErrorAction SilentlyContinue');
+                        applicationArmed.kill("SIGINT");
+                    } else {
+                        await exitAction(1);
+                    }
+                }, 5000)
+            }
+        } else if (receivedData === 'SG_HELLO' && ready === false) {
+            if (options.verbose) {
+                console.log(`Ready`);
+            }
+            subar.increment();
+            if (cliArgs.shutdown) {
+                subar.update(36, {
+                    stage: "Shutdown Request",
+                });
+                runCheckOut();
+            } else {
+                port.write('@5!');
+                sleep(100).then(() => {
+                    port.write(`@6:${options.applicationID}:!`);
+                });
+            }
+        } else if (receivedData === 'SG_LV1_RESET' || receivedData === 'SG_LV1_GOODBYE') {
+            await exitAction(0);
+        } else if (receivedData === 'SG_LV0_GOODBYE') {
+            sendMessage(`1`);
+        } else if (receivedData === 'SG_ENC_READY') {
+            if (options.verbose) {
+                console.log(`Switching to Encrypted Mode`);
+            }
+            subar.increment();
+            encryptedMode = true;
+        } else if (receivedData.startsWith("SG_UNLOCK")) {
+            subar.increment();
+            if (!cliArgs.shutdown) {
+                startCheckIn();
+            }
+        } else if (receivedData.startsWith("CRYPTO_KEY_")) {
+            returned_key = receivedData.substring(11).trim().split("x0")[0];
+        } else if (receivedData.startsWith("KEYCHIP_ID_")) {
+            keychip_id = receivedData.substring(11).trim();
+            await injectKeychipID();
+            subar.increment();
+            postCheckIn();
+        } else if (receivedData.startsWith("FIRMWARE_VER_")) {
+            keychip_version = receivedData.split(' ').map(e => e.split('_VER_').pop());
+            if (options.verbose) {
+                console.log(`Keychip Version: ${keychip_version.join('-')}`);
+            }
+            subar.increment();
+        }
+    }
+
+    parser.on('data', (data) => {
+        let receivedData = data.toString().trim();
+        if (receivedData.startsWith('$')) {
+            decryptMessage(receivedData.split('$')[1]);
+        } else {
+            parseIncomingMessage(receivedData);
+        }
+    });
+    port.on('error', async (err) => {
+        if (options.verbose) {
+            console.error(`Keychip Communication Error`, err);
+            await errorState('0008', 'Keychip Access Failed');
+        } else if (applicationArmed) {
+            if (cliArgs.forkExec)
+                await runCommand('Stop-ScheduledTask -TaskName "TEMP_SOS_APP" -ErrorAction SilentlyContinue');
+            applicationArmed.kill("SIGINT");
+        } else {
+            if (err.message.includes("File not found")) {
+                subar.stop();
+                console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip not found\x1b[0m');
+                await errorState('0001', 'Keychip Not Found');
+                await sleep(5000)
+            } else {
+                subar.stop();
+                console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Hardware Failure\x1b[0m');
+                await errorState('0009', 'Keychip Access Failed');
+            }
+        }
+        if (!applicationArmed) {
+            await exitAction(10);
+        }
+    });
+    port.on('close', async (err) => {
+        if (options.verbose) {
+            console.error(`Keychip Communication Closed`, err);
+        } else if (applicationArmed) {
+            console.error(`\nKeychip Removal\n`);
+            if (cliArgs.forkExec)
+                await runCommand('Stop-ScheduledTask -TaskName "TEMP_SOS_APP" -ErrorAction SilentlyContinue');
+            applicationArmed.kill("SIGINT");
+        } else {
+            if (err.message.includes("File not found")) {
+                subar.stop();
+                console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Removal\x1b[0m');
+                await errorState('0001', 'Keychip Not Found');
+            } else {
+                subar.stop();
+                console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Hardware Failure\x1b[0m');
+                await errorState('0009', 'Keychip Access Failed');
+            }
+        }
+        if (!applicationArmed) {
+            await exitAction(10);
+        }
+    });
+
+    // Handle the opening of the serial port
+    port.on('open', async () => {
+        await runCommand('Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Confirm:$false -ErrorAction SilentlyContinue | Out-Null', true);
+        subar.increment();
+        if (options.prepareScript) {
+            if (options.verbose) {
+                console.log(`Prepare Host`);
+            }
+            await setState('3', `Preparing System`)
+            subar.update(3, {
+                stage: "Preparing System"
+            });
+            await new Promise((ok) => {
+                const prepare = spawn('powershell.exe', ['-File', resolve(options.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+                    stdio: 'inherit', // Inherit the standard IO of the Node.js process
+                    workingDirectory: process.cwd(),
+                });
+                prepare.on('exit', function () {
+                    ok()
+                })
+                prepare.on('close', function () {
+                    ok()
+                })
+                prepare.on('end', function () {
+                    ok()
+                })
+            })
+        }
+        if (options.verbose) {
+            console.log(`Keychip Connected`);
+        }
+        subar.update(4, {
+            stage: "Preparing Keychip"
+        });
+        await setState('4', `Keychip Login`)
+        if (!options.dontCleanup) {
+            await runCommand('Get-Disk -FriendlyName "Msft Virtual Disk" -ErrorAction SilentlyContinue | ForEach-Object { Dismount-DiskImage -DevicePath $_.Path -Confirm:$false } | Out-Null', false);
+        }
+        await sleep(200);
+        sendMessage('?');
+        watchdog = setInterval(() => {
+            sendMessage('?');
+        }, ((!(cliArgs.editMode || cliArgs.shutdown || cliArgs.encryptMode)) ? 1000 : 2000));
+    });
 }
 
-let dropOutTimer = null;
-let lastCheckIn = null;
-
-parser.on('data', (data) => {
-    let receivedData = data.toString().trim();
-    if (receivedData.startsWith('$')) {
-        decryptMessage(receivedData.split('$')[1]);
-    } else {
-        parseIncomingMessage(receivedData);
-    }
-});
-port.on('error', async (err) => {
-    if (options.verbose) {
-        console.error(`Keychip Communication Error`, err);
-        await errorState('0008', 'Keychip Access Failed');
-    } else if (applicationArmed) {
-        if (cliArgs.forkExec)
-            await runCommand('Stop-ScheduledTask -TaskName "TEMP_SOS_APP" -ErrorAction SilentlyContinue');
-        applicationArmed.kill("SIGINT");
-    } else {
-        if (err.message.includes("File not found")) {
-            subar.stop();
-            console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip not found\x1b[0m');
-            await errorState('0001', 'Keychip Not Found');
-            await sleep(5000)
-        } else {
-            subar.stop();
-            console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Hardware Failure\x1b[0m');
-            await errorState('0009', 'Keychip Access Failed');
-        }
-    }
-    if (!applicationArmed)
-        ps.dispose().then(r => process.exit(10));
-});
-port.on('close', async (err) => {
-    if (options.verbose) {
-        console.error(`Keychip Communication Closed`, err);
-    } else if (applicationArmed) {
-        console.error(`\nKeychip Removal\n`);
-        if (cliArgs.forkExec)
-            await runCommand('Stop-ScheduledTask -TaskName "TEMP_SOS_APP" -ErrorAction SilentlyContinue');
-        applicationArmed.kill("SIGINT");
-    } else {
-        if (err.message.includes("File not found")) {
-            subar.stop();
-            console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Removal\x1b[0m');
-            await errorState('0001', 'Keychip Not Found');
-        } else {
-            subar.stop();
-            console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip Hardware Failure\x1b[0m');
-            await errorState('0009', 'Keychip Access Failed');
-        }
-    }
-    if (!applicationArmed)
-        ps.dispose().then(r => process.exit(10));
-});
-
-// Handle the opening of the serial port
-port.on('open', async () => {
-    await runCommand('Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Confirm:$false -ErrorAction SilentlyContinue | Out-Null', true);
-    subar.increment();
-    if (options.prepareScript) {
-        if (options.verbose) {
-            console.log(`Prepare Host`);
-        }
-        await setState('3', `Preparing System`)
-        subar.update(3, {
-            stage: "Preparing System"
-        });
-        await new Promise((ok) => {
-            const prepare = spawn('powershell.exe', ['-File', resolve(options.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
-                stdio: 'inherit', // Inherit the standard IO of the Node.js process
-                workingDirectory: process.cwd(),
-            });
-            prepare.on('exit', function () {
-                ok()
-            })
-            prepare.on('close', function () {
-                ok()
-            })
-            prepare.on('end', function () {
-                ok()
-            })
-        })
-    }
-    if (options.verbose) {
-        console.log(`Keychip Connected`);
-    }
-    subar.update(4, {
-        stage: "Preparing Keychip"
-    });
-    await setState('4', `Keychip Login`)
-    if (!options.dontCleanup) {
-        await runCommand('Get-Disk -FriendlyName "Msft Virtual Disk" -ErrorAction SilentlyContinue | ForEach-Object { Dismount-DiskImage -DevicePath $_.Path -Confirm:$false } | Out-Null', false);
-    }
-    await sleep(200);
-    sendMessage('?');
-    watchdog = setInterval(() => {
-        sendMessage('?');
-    }, ((!(cliArgs.editMode && cliArgs.shutdown && cliArgs.encryptMode)) ? 1000 : 2000));
-});
+process.on('uncaughtException', async (err) => {
+    console.log(err);
+    await errorState('0030', 'Main board Malfunctioning');
+})

@@ -7,6 +7,7 @@
     "child-shell": "^5.0.0",
     "cli-progress": "^3.12.0",
     "crypto-js": "^4.2.0",
+    "ini": "^4.1.1",
     "node-powershell": "^5.0.1",
     "serialport": "^12.0.0",
     "yargs": "^17.7.2"
