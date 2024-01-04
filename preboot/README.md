@@ -9,7 +9,7 @@ The included scripts are not plug in play and are deliberately censored and incl
 * **C:\ MUST be encrypted with TPM at all times and enable write filter for C:\ if required**
 
 ## Warning
-The folder structures and update USB structures **DO NOT APPLY TO Blue Steel (prebuilt images distributed by Missless)**, that uses different ways of packing updates.<br/>
+The folder structures and update USB structures **DO NOT APPLY TO Blue Steel (prebuilt images distributed by Missless)**, that uses different ways of packing updates (NOT Normal 7Zip).<br/>
 The update files may use the same extensions and look the same when unpacked but are all encrypted and ARS NOVA OS will not execute any unsigned code<br/>
 Blue Steel is a production and secured version of the system shown here, Things are intentional left out on purpose and may be running custom-builds of SOS as SOS is NOT built into the image<br/>
 
