@@ -1,4 +1,4 @@
-const application_version = 3.2;
+const application_version = 3.5;
 const expected_crypto_version = 2;
 const min_firmware_version = 2.3;
 process.stdout.write(
@@ -175,7 +175,11 @@ const cliArgs = yargs(hideBin(process.argv))
 async function errorState(errNum, errMessage) {
     const output =  `STEP ${lastStep}=${lastState}=true\nerror=true\nerrorno=ERROR ${errNum}\nerrormessage=${errMessage}\n`;
     if (cliArgs.displayState) {
-        fs.writeFileSync(cliArgs.displayState, Buffer.from(output));
+        try {
+            fs.writeFileSync(cliArgs.displayState, Buffer.from(output));
+        } catch (e) {
+            console.error('Failed to communicate with preboot')
+        }
     }
 }
 let lastStep = "";
@@ -185,7 +189,11 @@ async function setState(step, state, completed) {
     lastState = state;
     const output =  `STEP ${step}=${state}=${(completed) ? completed : 'false'}\nerror=false`;
     if (cliArgs.displayState) {
-        fs.writeFileSync(cliArgs.displayState, Buffer.from(output));
+        try {
+            fs.writeFileSync(cliArgs.displayState, Buffer.from(output));
+        } catch (e) {
+            console.error('Failed to communicate with preboot')
+        }
     }
 }
 
@@ -468,6 +476,16 @@ async function startCheckIn() {
         }
         if (options.verbose)
             console.log(`Unlock Done`);
+        try {
+            if (options.applicationINI && fs.existsSync(resolve(options.applicationINI) + '.bak')) {
+                fs.unlinkSync(resolve(options.applicationINI));
+                fs.copyFileSync(resolve(options.applicationINI) + '.bak', resolve(options.applicationINI));
+            } else if (options.applicationINI && fs.existsSync(resolve(options.applicationINI))) {
+                fs.copyFileSync(resolve(options.applicationINI), resolve(options.applicationINI) + '.bak');
+            }
+        } catch (e) {
+            await errorState('0110', 'Corrupted Database Volume');
+        }
         subar.update(34);
         if (software_mode) {
             await injectKeychipID();
@@ -507,7 +525,7 @@ async function postCheckIn() {
                 let args = [];
                 if (options.netPrepareScript)
                     args.push(`. ${resolve(options.netPrepareScript)}; `);
-                args.push(`Start-Process -Wait -WindowStyle Minimized -FilePath "${resolve(options.networkDriver)}" -ArgumentList '--configFile "${options.networkConfig}" ${(options.applicationINI) ? '--iniFile "' + dirname(options.applicationINI) + '"' : ''}'; `);
+                args.push(`Start-Process -Wait -WindowStyle Hidden -FilePath "${resolve(options.networkDriver)}" -ArgumentList '--configFile "${options.networkConfig}" ${(options.applicationINI) ? '--iniFile "' + dirname(options.applicationINI) + '"' : ''}'; `);
                 const initStart = PowerShell.command(args);
                 networkDriver = await psUtility.invoke(initStart);
                 networkOk = false;
@@ -519,6 +537,11 @@ async function postCheckIn() {
 
         if (options.verbose) {
             console.log(`Launch App`);
+        }
+        if (!cliArgs.update) {
+            await setState('20', `Flush Write Cache`);
+            await runCommand(`Write-VolumeCache Y`);
+            await runCommand(`Write-VolumeCache S`);
         }
         await setState((cliArgs.update) ? '22' : '21', (cliArgs.update) ? 'Install Program Update' : `Launch Game Program`)
         subar.update(36, {
@@ -538,6 +561,12 @@ async function postCheckIn() {
                 await errorState('0049', 'Install Media Access Failed');
                 console.error('\n\n\x1b[5m\x1b[41m\x1b[30mNo Update Application was found\x1b[0m\n');
             }
+
+            await setState('23', `Flush Write Cache`);
+            await runCommand(`Write-VolumeCache X`);
+            await runCommand(`Write-VolumeCache Y`);
+            await runCommand(`Write-VolumeCache Z`);
+            await runCommand(`Write-VolumeCache S`);
         } else {
             if (options.applicationExec) {
                 if (fs.existsSync(resolve(`X:/${options.applicationExec}`))) {
@@ -596,7 +625,11 @@ async function runCheckOut() {
         let st_cfg = ini.parse(_sg.toString());
         delete st_cfg['keychip']['id'];
         const _st_string = ini.stringify(st_cfg);
-        fs.writeFileSync(resolve(options.applicationINI), _st_string);
+        try {
+            fs.writeFileSync(resolve(options.applicationINI), _st_string);
+        } catch (e) {
+            await errorState('0700', 'Database Write Failure\nEnter Emergency Mode and reload Database');
+        }
     }
     sdbar.update(2, {
         stage: "Dismount Application"
@@ -913,8 +946,25 @@ async function injectKeychipID() {
         const _sg = fs.readFileSync(resolve(options.applicationINI), 'utf-8');
         let st_cfg = ini.parse(_sg.toString());
         st_cfg['keychip']['id'] = keychip_id;
+        switch (options.applicationID) {
+            case "SDHD":
+                const hz = parseInt((await runCommand(`(Get-WmiObject win32_videocontroller | Where { $_.Status -eq 'OK' -and $_.Availability -eq 3 } | Select -Last 1).CurrentRefreshRate`)).raw)
+                // Chunithm New
+                if (st_cfg['gpio'] === undefined)
+                    st_cfg['gpio'] = { 'dipsw1' : 0 };
+                st_cfg['gpio']['dipsw1'] = (hz >= 120) ? 0 : 1
+                st_cfg['gpio']['dipsw2'] = (hz >= 120) ? 0 : 1
+                break;
+            default:
+                // Nothing to do
+                break;
+        }
         const _st_string = ini.stringify(st_cfg);
-        fs.writeFileSync(resolve(options.applicationINI), _st_string);
+        try {
+            fs.writeFileSync(resolve(options.applicationINI), _st_string);
+        } catch (e) {
+            await errorState('0700', 'Database Write Failure\nEnter Emergency Mode and reload Database');
+        }
     }
     if (options.verbose) {
         console.log(`Keychip ID: ${keychip_id}`);
@@ -933,7 +983,7 @@ async function hashPassword(inputString) {
     return (crypto.SHA256(encrypted.ciphertext.toString(crypto.enc.Base64))).toString().toUpperCase();
 }
 
-    function sendMessage(message) {
+function sendMessage(message) {
     if (encryptedMode) {
         const messageBytes = crypto.AES.encrypt(
             `SG_ENCMSG ${message}`,
@@ -954,31 +1004,25 @@ async function hashPassword(inputString) {
     }
 }
 
-if (!(options.applicationID && options.loginKey && options.loginIV)) {
-    subar.stop();
-    console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip not found\x1b[0m');
-    (async () => {
-        await errorState('0001', 'Keychip Not Found');
-        exitAction(240);
-        await sleep(5000)
-    })()
-}
-
 if (software_mode) {
     (async () => {
-        if (!software_mode) {
-            await runCommand('Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Confirm:$false -ErrorAction SilentlyContinue | Out-Null', true);
+        if (!(options.applicationID && options.loginKey && options.loginIV)) {
+            subar.stop();
+            console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip not found\x1b[0m');
+            await errorState('0001', 'Keychip Not Found');
+            await errorState('0001', 'Keychip Not Found');
+            await sleep(5000);
+            exitAction(240);
         }
         subar.increment();
+        if (options.verbose) {
+            console.log(`Prepare Host`);
+        }
+        await setState('3', `Preparing System`)
+        subar.update(3, {
+            stage: "Preparing System"
+        });
         if (options.prepareScript) {
-            if (options.verbose) {
-                console.log(`Prepare Host`);
-            }
-            await setState('3', `Preparing System`)
-            subar.update(3, {
-                stage: "Preparing System"
-            });
-
             await new Promise((ok) => {
                 const prepare = spawn('powershell.exe', ['-File', resolve(options.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
                     stdio: 'inherit', // Inherit the standard IO of the Node.js process
@@ -1212,6 +1256,14 @@ if (software_mode) {
 
     // Handle the opening of the serial port
     port.on('open', async () => {
+        if (!(options.applicationID && options.loginKey && options.loginIV)) {
+            subar.stop();
+            console.error('\n\x1b[5m\x1b[41m\x1b[30mKeychip not found\x1b[0m');
+            await errorState('0001', 'Keychip Not Found');
+            await errorState('0001', 'Keychip Not Found');
+            await sleep(5000);
+            exitAction(240);
+        }
         await runCommand('Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Confirm:$false -ErrorAction SilentlyContinue | Out-Null', true);
         subar.increment();
         if (options.prepareScript) {
@@ -1258,5 +1310,5 @@ if (software_mode) {
 
 process.on('uncaughtException', async (err) => {
     console.log(err);
-    await errorState('0030', 'Main board Malfunctioning');
+    await errorState('0940', err.message);
 })
