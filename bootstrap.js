@@ -123,6 +123,10 @@ const cliArgs = yargs(hideBin(process.argv))
         description: 'PS1 Script to execute right before exiting keychip'
     })
 
+    .option('networkDirect', {
+        type: 'bool',
+        description: 'Disable Network Environment'
+    })
     .option('networkDriver', {
         alias: 'h',
         type: 'string',
@@ -218,6 +222,7 @@ let software_mode = cliArgs.swMode || false;
 let knox_mode = false;
 let returned_key = null;
 let keychip_id = null;
+let board_id = 'ACA401A00660401';
 let keychip_version = [0, 0, null];
 let ready = false;
 let applicationArmed = false;
@@ -257,7 +262,7 @@ if (cliArgs.auth) {
         if (!authString)
             throw new Error('No String');
         const authArray = authString.split(' ');
-        if (authArray.length !== ((software_mode) ? 4 : 3))
+        if ((software_mode) ? authArray.length >= 4 : authArray.length !== 3)
             throw new Error('Invalid Auth String Format');
 
         options.applicationID = authArray[0];
@@ -265,6 +270,9 @@ if (cliArgs.auth) {
         options.loginIV = authArray[2];
         if (software_mode) {
             keychip_id = authArray[3];
+            if (authArray.length >= 5) {
+                board_id = authArray[4];
+            }
         }
     } catch (err) {
         subar.stop();
@@ -513,7 +521,7 @@ async function postCheckIn() {
             sendMessage("2");
         exitAction(0);
     } else if (!cliArgs.shutdown) {
-        if (options.networkDriver) {
+        if (options.networkDriver && !cliArgs.update) {
             await setState('14', `Setup For Network`);
             subar.update(35, {
                 stage: "Configure Network Driver"
@@ -599,31 +607,34 @@ async function runCheckOut() {
     sdbar.start(11,0, {
         stage: "Application Terminated"
     })
-    if (options.shutdownScript) {
-        sdbar.update(1, {
-            stage: "Shutdown System"
-        })
-        await new Promise((ok) => {
-            const prepare = spawn('powershell.exe', ['-File', resolve(options.shutdownScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
-                stdio: 'inherit', // Inherit the standard IO of the Node.js process,
-                workingDirectory: process.cwd(),
-            });
-            prepare.on('exit', function () {
-                ok()
+    if (!cliArgs.update) {
+        if (options.shutdownScript) {
+            sdbar.update(1, {
+                stage: "Shutdown System"
             })
-            prepare.on('close', function () {
-                ok()
+            await new Promise((ok) => {
+                const prepare = spawn('powershell.exe', ['-File', resolve(options.shutdownScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+                    stdio: 'inherit', // Inherit the standard IO of the Node.js process,
+                    workingDirectory: process.cwd(),
+                });
+                prepare.on('exit', function () {
+                    ok()
+                })
+                prepare.on('close', function () {
+                    ok()
+                })
+                prepare.on('end', function () {
+                    ok()
+                })
             })
-            prepare.on('end', function () {
-                ok()
-            })
-        })
-        sdbar.increment();
+            sdbar.increment();
+        }
     }
     if (options.applicationINI && fs.existsSync(resolve(options.applicationINI))) {
         const _sg = fs.readFileSync(resolve(options.applicationINI), 'utf-8');
         let st_cfg = ini.parse(_sg.toString());
         delete st_cfg['keychip']['id'];
+        delete st_cfg['pcbid'];
         const _st_string = ini.stringify(st_cfg);
         try {
             fs.writeFileSync(resolve(options.applicationINI), _st_string);
@@ -663,45 +674,47 @@ async function runCheckOut() {
     })
     if (!software_mode)
         sendMessage('0');
-    if (options.cleanupScript || options.netShutdownScript) {
-        sdbar.update(10, {
-            stage: "Cleanup System"
-        })
-        if (options.cleanupScript) {
-            await new Promise((ok) => {
-                const prepare = spawn('powershell.exe', ['-File', resolve(options.cleanupScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
-                    stdio: 'inherit', // Inherit the standard IO of the Node.js process
-                    workingDirectory: process.cwd(),
-                });
-                prepare.on('exit', function () {
-                    ok()
-                })
-                prepare.on('close', function () {
-                    ok()
-                })
-                prepare.on('end', function () {
-                    ok()
-                })
+    if (!cliArgs.update) {
+        if (options.cleanupScript || options.netShutdownScript) {
+            sdbar.update(10, {
+                stage: "Cleanup System"
             })
+            if (options.cleanupScript) {
+                await new Promise((ok) => {
+                    const prepare = spawn('powershell.exe', ['-File', resolve(options.cleanupScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+                        stdio: 'inherit', // Inherit the standard IO of the Node.js process
+                        workingDirectory: process.cwd(),
+                    });
+                    prepare.on('exit', function () {
+                        ok()
+                    })
+                    prepare.on('close', function () {
+                        ok()
+                    })
+                    prepare.on('end', function () {
+                        ok()
+                    })
+                })
+            }
+            if (options.netShutdownScript) {
+                await new Promise((ok) => {
+                    const prepare = spawn('powershell.exe', ['-File', resolve(options.netShutdownScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+                        stdio: 'inherit', // Inherit the standard IO of the Node.js process
+                        workingDirectory: process.cwd(),
+                    });
+                    prepare.on('exit', function () {
+                        ok()
+                    })
+                    prepare.on('close', function () {
+                        ok()
+                    })
+                    prepare.on('end', function () {
+                        ok()
+                    })
+                })
+            }
+            sdbar.increment();
         }
-        if (options.netShutdownScript) {
-            await new Promise((ok) => {
-                const prepare = spawn('powershell.exe', ['-File', resolve(options.netShutdownScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
-                    stdio: 'inherit', // Inherit the standard IO of the Node.js process
-                    workingDirectory: process.cwd(),
-                });
-                prepare.on('exit', function () {
-                    ok()
-                })
-                prepare.on('close', function () {
-                    ok()
-                })
-                prepare.on('end', function () {
-                    ok()
-                })
-            })
-        }
-        sdbar.increment();
     }
     sdbar.update(11, {
         stage: "Shutdown Complete"
@@ -946,14 +959,21 @@ async function injectKeychipID() {
         const _sg = fs.readFileSync(resolve(options.applicationINI), 'utf-8');
         let st_cfg = ini.parse(_sg.toString());
         st_cfg['keychip']['id'] = keychip_id;
+        st_cfg['pcbid'] = { "serialNo": board_id };
+        if (st_cfg['netenv'] === undefined)
+            st_cfg['netenv'] = {'enable': 1};
+        if (cliArgs.networkDirect) {
+            st_cfg['netenv']['enable'] = 0;
+        } else {
+            st_cfg['netenv']['enable'] = 1;
+        }
         switch (options.applicationID) {
             case "SDHD":
                 const hz = parseInt((await runCommand(`(Get-WmiObject win32_videocontroller | Where { $_.Status -eq 'OK' -and $_.Availability -eq 3 } | Select -Last 1).CurrentRefreshRate`)).raw)
                 // Chunithm New
-                if (st_cfg['gpio'] === undefined)
-                    st_cfg['gpio'] = { 'dipsw1' : 0 };
-                st_cfg['gpio']['dipsw1'] = (hz >= 120) ? 0 : 1
+                st_cfg['gpio'] = { 'dipsw1' : 0 };
                 st_cfg['gpio']['dipsw2'] = (hz >= 120) ? 0 : 1
+                st_cfg['gpio']['dipsw3'] = (hz >= 120) ? 0 : 1
                 break;
             default:
                 // Nothing to do
@@ -968,6 +988,7 @@ async function injectKeychipID() {
     }
     if (options.verbose) {
         console.log(`Keychip ID: ${keychip_id}`);
+        console.log(`Board ID  : ${board_id}`);
     }
 }
 async function hashPassword(inputString) {
@@ -1015,29 +1036,31 @@ if (software_mode) {
             exitAction(240);
         }
         subar.increment();
-        if (options.verbose) {
-            console.log(`Prepare Host`);
-        }
-        await setState('3', `Preparing System`)
-        subar.update(3, {
-            stage: "Preparing System"
-        });
-        if (options.prepareScript) {
-            await new Promise((ok) => {
-                const prepare = spawn('powershell.exe', ['-File', resolve(options.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
-                    stdio: 'inherit', // Inherit the standard IO of the Node.js process
-                    workingDirectory: process.cwd(),
-                });
-                prepare.on('exit', function () {
-                    ok()
+        if (!cliArgs.update) {
+            if (options.verbose) {
+                console.log(`Prepare Host`);
+            }
+            await setState('3', `Preparing System`)
+            subar.update(3, {
+                stage: "Preparing System"
+            });
+            if (options.prepareScript) {
+                await new Promise((ok) => {
+                    const prepare = spawn('powershell.exe', ['-File', resolve(options.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+                        stdio: 'inherit', // Inherit the standard IO of the Node.js process
+                        workingDirectory: process.cwd(),
+                    });
+                    prepare.on('exit', function () {
+                        ok()
+                    })
+                    prepare.on('close', function () {
+                        ok()
+                    })
+                    prepare.on('end', function () {
+                        ok()
+                    })
                 })
-                prepare.on('close', function () {
-                    ok()
-                })
-                prepare.on('end', function () {
-                    ok()
-                })
-            })
+            }
         }
         if (options.verbose) {
             console.log(`Software Keychip Emulator Mode`);
