@@ -1,13 +1,12 @@
 <img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/Iona.png"/>
 
-# Savior of Song "Iona" Hardware Keychip for Windows
+# Savior of Song "Iona" Software/Hardware Keychip for Windows
 Keychip emulator that handles game disk encryption and application lifecycle management for arcade cabinet or other applications
 
 ## Important Note!
 This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is designed to work with a sudo-ALLS setup where sgpreboot does not exist. It is designed to recreate the hardware key requirement to use the game and protect data in transit and from offline ripping. This is not designed to be super high security.
 
 ## ToDo
-* Segatools.ini keychip updates or direct integration to amdeamon
 * Support to auto-relaunch application on death
 * Board layout for custom keychip PCB with Infinion Private Key Store and Encryption Accelerator
 
@@ -16,12 +15,23 @@ This is NOT in ANY WAY compatible with a official ALLS/Nu keychip/preboot and is
 * Protection of a game/application when the host in transport
 * Prevention of offline data ripping
 
+## Software vs. Hardware Keychip
+| Hardware                | Software                 |
+|-------------------------|--------------------------|
+| Physical Keystore       | Command Line Argument    |
+| Slower Crypto I/O       | Instant Crypto Function  |
+| Requires Device         | No Additional Hardware   |
+| Removal Watchdog        | No Protection            |
+| No Offline Access       | Can allow access offline |
+| Prevents inline attacks | No Protection            |
+
 ## I need help and it's not worth an Issue
 For the love of god please don't post actually game keys in Issues, thanks<br/>
 You can message me on discord (NOT FRIEND FREQUEST, MESSAGE REQUEST) `@vorekazari` or you know who I am in Missless<br/>
 ![image](https://github.com/UiharuKazari2008/SOS-Keychip/assets/15165770/f9ba98ae-7b46-454d-a1a5-c97c9a8813e9)
 
 ## Hardware
+**Hardware Key is not required anymore and there is now a software mode, your welcome**
 **More than 2KB of RAM IS REQUIRED**<br/>
 Waveshare RP2040-GEEK<br>
 <img src="https://github.com/UiharuKazari2008/SOS-Keychip/blob/main/.resources/IMG_5948.jpg"/><br>
@@ -32,6 +42,7 @@ or any generic RP2040/Arduino<br/>
 0. Download the latest executables (and VHD Images if this is your first time)
   * https://github.com/UiharuKazari2008/SOS-Keychip/releases/download/release/savior_of_song_keychip.exe
   * https://github.com/UiharuKazari2008/SOS-Keychip/releases/tag/VHD-Templates
+### Hardware Key
 1. Create a device_key.h file in the ./Keychip-<version> folder
 ```cplusplus
 const int numOfKeys = 1;
@@ -48,7 +59,7 @@ const char* ininCommunicationIV[numOfKeys] = { "INITAL_128_IV_KEY" };
 2. Create CMAK authentication string
     * Authentication String should be a [base64 encoded string](https://www.bing.com/search?q=base64+encode) like bellow with each value separated by spaces
     * `GAMEID INITAL_128_AES_KEY INITAL_128_IV_KEY` => BASE64
-    * If you are using mutiple keys/games you must use a seperate authentication key for each
+    * If you are using multiple keys/games you must use a separate authentication key for each
 3. Launch Arduino IDE and flash the firmware
   * Install the following libraries with the library manager
     * ArduinoBearSSL
@@ -68,6 +79,15 @@ const char* ininCommunicationIV[numOfKeys] = { "INITAL_128_IV_KEY" };
       * You must install the following libraries 
         * [Arduino-SHA-256](https://github.com/manutenfruits/Arduino-SHA-256/tree/master) 
         * [ArduinoMD5](https://github.com/tzikis/ArduinoMD5/tree/master)
+### Software Key
+2. Create CMAK authentication string
+    * Authentication String should be a [base64 encoded string](https://www.bing.com/search?q=base64+encode) like bellow with each value separated by spaces
+    * `GAMEID INITAL_128_AES_KEY INITAL_128_IV_KEY KEYCHIP_ID BOARD_ID` => BASE64
+    * Keychip ID must be in the format `XXXX-XXXXXXXXXXX`
+    * Board ID is not required but should be in the format of `XXXXXXXXXXXXXXX`
+3. In all future commands you need to add `--swMode`
+
+ 
 4. Copy the exe in folder with the blank VHD to your new game folder
 5. Mount and Encrypt the volumes<br>
 **RUN AS ADMINISTRATOR**
@@ -90,11 +110,23 @@ const char* ininCommunicationIV[numOfKeys] = { "INITAL_128_IV_KEY" };
   * If you have issues with your application not working as expected, add `--forkExec` to fork the runtime
   * Keychip should be on `COM5` or use `--port COM#` to change
 ```powershell
-& ./savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd
+& ./savior_of_song_keychip.exe --auth AUTH_STRING --applicationVHD app.vhd --appDataVHD appdata.vhd --optionVHD option.vhd --appIni "Y:\segatools.ini"
 ```
 
 ## Additional Setup
-To setup a more realistic ALLS setup refer to the [preboot](https://github.com/UiharuKazari2008/SOS-Keychip/tree/main/preboot) directory of this repo for infomation, To setup a emulated preboot refer to the [ARS NOVA Bootloader](https://github.com/UiharuKazari2008/ARS-NOVA-Bootloader) repo.
+### Segatools Interaction
+* Sets Keychip ID
+* Sets Baord ID (if found)
+* Sets DIP switches for games that support it (SDHD SP Mode detection)
+
+`--appIni "Y:\segatools.ini"`
+
+### ALLS AppBoot Emulator
+To setup a more realistic ALLS setup refer to the [preboot](https://github.com/UiharuKazari2008/SOS-Keychip/tree/main/preboot) directory of this repo for information, To setup a emulated preboot refer to the [ARS NOVA Bootloader](https://github.com/UiharuKazari2008/ARS-NOVA-Bootloader) repo.
+
+### Haruna Network Driver
+Supports the Haruna C2C over WAN Network Driver and Overlay natively (Please obtain your copy from your network)
+* `--netPrepScript net_prepare.ps1 --netCleanScript net_cleanup.ps1 --networkDriver "C:\SEGA\system\haruna_network.exe" --networkConfig "Y:\network_config.json"`
 
 ## Command Line Options
 ```powershell
@@ -104,16 +136,21 @@ by Kazari
 Options:
   -c, --port             Keychip Serial Port
                          COM5 is default port                           [string]
+      --swMode           Use Software Keychip                          [boolean]
   -a, --auth             CMAK Authentication String
                          Base64 Encoded "GAMEID AES_KEY AES_IV"         [string]
   -x, --applicationVHD   Application Disk Image (X:\)                   [string]
   -y, --appDataVHD       Configuration Disk Image (Y:\)                 [string]
   -z, --optionVHD        Options Disk Image (Z:\)                       [string]
+  -i, --appIni           Applications INI file to be used for networking and
+                         keychip pass-trough                            [string]
   -e, --env              Environment Configuration File                 [string]
   -s, --secureEnv        Environment Configuration File (Secured File)  [string]
       --forkExec         Fork the application as another child process in the
                          event that the application is malfunctioning being
                          launched the normal way
+      --restrictExec     Run Application with Restricted Permissions (Creates
+                         new window)
       --applicationExec  File to execute (must be in X:\)
                          Default order:
                          1. X:\<applicationExec>
@@ -126,6 +163,12 @@ Options:
                          should occur (Only AppData is Writable)        [string]
   -q, --cleanupScript    PS1 Script to execute right before exiting keychip
                                                                         [string]
+      --networkDirect    Network Environment IP Address                 [string]
+  -h, --networkDriver    Haruna Network Driver (or other applicable)    [string]
+      --networkOverlay   Haruna Status Overlay (or other applicable)    [string]
+  -n, --networkConfig    Network Driver configFile Value                [string]
+      --netPrepScript    Network Prepare Script                         [string]
+      --netCleanScript   Network Cleanup Script                         [string]
       --update           Mount Application with write access and run update
                          script (must be in X:\)
                          Default Order:
@@ -137,6 +180,9 @@ Options:
       --shutdown         Unmount and Check-Out
       --encryptSetup     Setup Encryption of Application Volumes
       --dontCleanup      Do not unmount all disk images mounted
+      --displayState     state.txt file used by "A.S.R."                [string]
+      --configState      current_config.txt file used by "A.S.R."       [string]
+      --logFile          Log file for powershell transactions           [string]
 ```
 
 ## Modifying Games Data after inital Install
