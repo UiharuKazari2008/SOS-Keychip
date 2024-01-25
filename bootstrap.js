@@ -1,4 +1,4 @@
-const application_version = 3.5;
+const application_version = 3.7;
 const expected_crypto_version = 2;
 const min_firmware_version = 2.3;
 process.stdout.write(
@@ -124,13 +124,17 @@ const cliArgs = yargs(hideBin(process.argv))
     })
 
     .option('networkDirect', {
-        type: 'bool',
-        description: 'Disable Network Environment'
+        type: 'string',
+        description: 'Network Environment IP Address'
     })
     .option('networkDriver', {
         alias: 'h',
         type: 'string',
         description: 'Haruna Network Driver (or other applicable)'
+    })
+    .option('networkOverlay', {
+        type: 'string',
+        description: 'Haruna Status Overlay (or other applicable)'
     })
     .option('networkConfig', {
         alias: 'n',
@@ -170,6 +174,10 @@ const cliArgs = yargs(hideBin(process.argv))
         type: 'string',
         description: 'state.txt file used by "A.S.R."'
     })
+    .option('configState', {
+        type: 'string',
+        description: 'current_config.txt file used by "A.S.R."'
+    })
     .option('logFile', {
         type: 'string',
         description: 'Log file for powershell transactions'
@@ -195,6 +203,22 @@ async function setState(step, state, completed) {
     if (cliArgs.displayState) {
         try {
             fs.writeFileSync(cliArgs.displayState, Buffer.from(output));
+        } catch (e) {
+            console.error('Failed to communicate with preboot')
+        }
+    }
+}
+let lastHarunaState = "false"
+let lastSpState = "false"
+async function setConState(haruna_state, sp_state) {
+    if (haruna_state !== undefined)
+        lastHarunaState = haruna_state;
+    if (sp_state !== undefined)
+        lastSpState = sp_state;
+    const output =  `haruna=${lastHarunaState}\nsp_en=${lastSpState}`;
+    if (cliArgs.configState) {
+        try {
+            fs.writeFileSync(cliArgs.configState, Buffer.from(output));
         } catch (e) {
             console.error('Failed to communicate with preboot')
         }
@@ -227,6 +251,7 @@ let keychip_version = [0, 0, null];
 let ready = false;
 let applicationArmed = false;
 let encryptedMode = !!(cliArgs.shutdown);
+let highRefreshRate = false;
 
 if (cliArgs.env && fs.existsSync(resolve(cliArgs.env))) {
     secureOptions = JSON.parse(fs.readFileSync(resolve(cliArgs.env)).toString());
@@ -251,6 +276,7 @@ options = {
     shutdownScript: cliArgs.shutdownScript || options.shutdown_script,
     dontCleanup: cliArgs.dontCleanup || options.no_dismount_vhds,
     networkDriver: cliArgs.networkDriver || options.network_driver,
+    networkOverlay: cliArgs.networkOverlay || options.network_overlay,
     networkConfig: cliArgs.networkConfig || options.network_config,
     netPrepareScript: cliArgs.netPrepScript || options.network_start_script,
     netShutdownScript: cliArgs.netCleanScript || options.network_stop_script,
@@ -262,7 +288,7 @@ if (cliArgs.auth) {
         if (!authString)
             throw new Error('No String');
         const authArray = authString.split(' ');
-        if ((software_mode) ? authArray.length >= 4 : authArray.length !== 3)
+        if (authArray.length <= 3)
             throw new Error('Invalid Auth String Format');
 
         options.applicationID = authArray[0];
@@ -522,6 +548,27 @@ async function postCheckIn() {
         exitAction(0);
     } else if (!cliArgs.shutdown) {
         if (options.networkDriver && !cliArgs.update) {
+            try {
+                const haruna_config = JSON.parse(fs.readFileSync(resolve(options.networkConfig)));
+                if (haruna_config && haruna_config.login && haruna_config.login.group) {
+                    switch (haruna_config.login.group) {
+                    case "B":
+                        await setConState("B");
+                        break;
+                    case "C":
+                        await setConState("C");
+                        break;
+                    case "D":
+                        await setConState("D");
+                        break;
+                    default:
+                        await setConState("A");
+                        break;
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to read Harunas Config")
+            }
             await setState('14', `Setup For Network`);
             subar.update(35, {
                 stage: "Configure Network Driver"
@@ -533,10 +580,13 @@ async function postCheckIn() {
                 let args = [];
                 if (options.netPrepareScript)
                     args.push(`. ${resolve(options.netPrepareScript)}; `);
+                if (options.networkOverlay)
+                    args.push(`Start-Process -WindowStyle Hidden -FilePath "${resolve(options.networkOverlay)}" -WorkingDirectory "${dirname(resolve(options.networkOverlay))}" -ArgumentList '${lastHarunaState.toLowerCase()} ${(basename(options.networkDriver)).replace('.exe','')}'; `);
                 args.push(`Start-Process -Wait -WindowStyle Hidden -FilePath "${resolve(options.networkDriver)}" -ArgumentList '--configFile "${options.networkConfig}" ${(options.applicationINI) ? '--iniFile "' + dirname(options.applicationINI) + '"' : ''}'; `);
                 const initStart = PowerShell.command(args);
                 networkDriver = await psUtility.invoke(initStart);
                 networkOk = false;
+                await setConState("false");
                 startDriver();
             }
             startDriver();
@@ -559,8 +609,10 @@ async function postCheckIn() {
         subar.stop();
         if (!networkOk) {
             enableNetworkDriver = false;
-            await errorState('8002', 'Network setting error (SYSTEM)');
-        } else if (cliArgs.update) {
+            //await errorState('8002', 'Network setting error (SYSTEM)');
+            await setConState("false");
+        }
+        if (cliArgs.update) {
             if (fs.existsSync(resolve(`X:/update.ps1`))) {
                 await runCommand(`. X:/update.ps1  "${unlockPassword}"`);
             } else if (fs.existsSync(resolve(`X:/download.ps1`))) {
@@ -962,18 +1014,16 @@ async function injectKeychipID() {
         st_cfg['pcbid'] = { "serialNo": board_id };
         if (st_cfg['netenv'] === undefined)
             st_cfg['netenv'] = {'enable': 1};
-        if (cliArgs.networkDirect) {
-            st_cfg['netenv']['enable'] = 0;
-        } else {
-            st_cfg['netenv']['enable'] = 1;
+        if (cliArgs.networkDirect && cliArgs.networkDirect.length > 0) {
+            st_cfg['netenv']['addrSuffix'] = cliArgs.networkDirect;
         }
         switch (options.applicationID) {
             case "SDHD":
-                const hz = parseInt((await runCommand(`(Get-WmiObject win32_videocontroller | Where { $_.Status -eq 'OK' -and $_.Availability -eq 3 } | Select -Last 1).CurrentRefreshRate`)).raw)
+
                 // Chunithm New
                 st_cfg['gpio'] = { 'dipsw1' : 0 };
-                st_cfg['gpio']['dipsw2'] = (hz >= 120) ? 0 : 1
-                st_cfg['gpio']['dipsw3'] = (hz >= 120) ? 0 : 1
+                st_cfg['gpio']['dipsw2'] = (highRefreshRate) ? 0 : 1
+                st_cfg['gpio']['dipsw3'] = (highRefreshRate) ? 0 : 1
                 break;
             default:
                 // Nothing to do
@@ -1025,6 +1075,39 @@ function sendMessage(message) {
     }
 }
 
+async function prepareHost() {
+    if (options.verbose) {
+        console.log(`Prepare Host`);
+    }
+    await setState('3', `Preparing System`)
+    subar.update(3, {
+        stage: "Preparing System"
+    });
+    if (options.prepareScript) {
+        await new Promise((ok) => {
+            const prepare = spawn('powershell.exe', ['-File', resolve(options.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
+                stdio: 'inherit', // Inherit the standard IO of the Node.js process
+                workingDirectory: process.cwd(),
+            });
+            prepare.on('exit', function () {
+                ok()
+            })
+            prepare.on('close', function () {
+                ok()
+            })
+            prepare.on('end', function () {
+                ok()
+            })
+        })
+    }
+    const hz = parseFloat((await runCommand(`(Get-WmiObject win32_videocontroller | Where { $_.Status -eq 'OK' -and $_.Availability -eq 3 } | Select -Last 1).CurrentRefreshRate`)).raw)
+    highRefreshRate = (hz >= 120);
+    await setConState("false", (highRefreshRate) ? "true" : "false");
+    if (options.networkDriver && options.networkConfig) {
+        await setConState("true");
+    }
+}
+
 if (software_mode) {
     (async () => {
         if (!(options.applicationID && options.loginKey && options.loginIV)) {
@@ -1036,32 +1119,8 @@ if (software_mode) {
             exitAction(240);
         }
         subar.increment();
-        if (!cliArgs.update) {
-            if (options.verbose) {
-                console.log(`Prepare Host`);
-            }
-            await setState('3', `Preparing System`)
-            subar.update(3, {
-                stage: "Preparing System"
-            });
-            if (options.prepareScript) {
-                await new Promise((ok) => {
-                    const prepare = spawn('powershell.exe', ['-File', resolve(options.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
-                        stdio: 'inherit', // Inherit the standard IO of the Node.js process
-                        workingDirectory: process.cwd(),
-                    });
-                    prepare.on('exit', function () {
-                        ok()
-                    })
-                    prepare.on('close', function () {
-                        ok()
-                    })
-                    prepare.on('end', function () {
-                        ok()
-                    })
-                })
-            }
-        }
+        if (!cliArgs.update)
+            await prepareHost();
         if (options.verbose) {
             console.log(`Software Keychip Emulator Mode`);
         }
@@ -1289,33 +1348,8 @@ if (software_mode) {
         }
         await runCommand('Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted -Confirm:$false -ErrorAction SilentlyContinue | Out-Null', true);
         subar.increment();
-        if (options.prepareScript) {
-            if (options.verbose) {
-                console.log(`Prepare Host`);
-            }
-            await setState('3', `Preparing System`)
-            subar.update(3, {
-                stage: "Preparing System"
-            });
-            await new Promise((ok) => {
-                const prepare = spawn('powershell.exe', ['-File', resolve(options.prepareScript), '-ExecutionPolicy', 'Unrestricted ', '-NoProfile:$true'], {
-                    stdio: 'inherit', // Inherit the standard IO of the Node.js process
-                    workingDirectory: process.cwd(),
-                });
-                prepare.on('exit', function () {
-                    ok()
-                })
-                prepare.on('close', function () {
-                    ok()
-                })
-                prepare.on('end', function () {
-                    ok()
-                })
-            })
-        }
-        if (options.verbose) {
-            console.log(`Keychip Connected`);
-        }
+        if (!cliArgs.update)
+            await prepareHost();
         subar.update(4, {
             stage: "Preparing Keychip"
         });
