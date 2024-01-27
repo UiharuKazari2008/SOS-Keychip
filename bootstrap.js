@@ -1,4 +1,4 @@
-const application_version = 3.7;
+const application_version = 3.8;
 const expected_crypto_version = 2;
 const min_firmware_version = 2.3;
 process.stdout.write(
@@ -288,7 +288,7 @@ if (cliArgs.auth) {
         if (!authString)
             throw new Error('No String');
         const authArray = authString.split(' ');
-        if (authArray.length <= 3)
+        if (authArray.length < 3)
             throw new Error('Invalid Auth String Format');
 
         options.applicationID = authArray[0];
