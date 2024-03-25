@@ -1,4 +1,4 @@
-const application_version = 3.8;
+const application_version = 3.9;
 const expected_crypto_version = 2;
 const min_firmware_version = 2.3;
 process.stdout.write(
@@ -77,6 +77,10 @@ const cliArgs = yargs(hideBin(process.argv))
         alias: 'z',
         type: 'string',
         description: 'Options Disk Image (Z:\\)'
+    })
+    .option('extraVHD', {
+        type: 'string',
+        description: 'Extra Disk Image #1 (W:\\)'
     })
     .option('appIni', {
         alias: 'i',
@@ -270,6 +274,7 @@ options = {
     applicationVHD: cliArgs.applicationVHD || options.app,
     appDataVHD: cliArgs.appDataVHD || options.appdata,
     optionVHD: cliArgs.optionVHD || options.option,
+    extraVHD: cliArgs.extraVHD || options.extra_disk_0,
     applicationExec: cliArgs.applicationExec || options.app_script,
     prepareScript: cliArgs.prepareScript || options.prepare_script,
     cleanupScript: cliArgs.cleanupScript || options.cleanup_script,
@@ -316,6 +321,7 @@ if (cliArgs.versionFile) {
         applicationVHD: vf.app,
         appDataVHD: vf.appdata,
         optionVHD: vf.option,
+        extraVHD: vf.extra_disk_0,
         applicationExec: vf.app_script
     }
     options = {
@@ -379,7 +385,7 @@ async function startCheckIn() {
         sendMessage('0');
         await exitAction(102);
     }
-    if (options.applicationVHD || options.optionVHD || options.appDataVHD) {
+    if (options.applicationVHD || options.optionVHD  || options.extraVHD || options.appDataVHD) {
         await setState('11', (cliArgs.update) ? `Mount Volumes (Update)` : `Mount Game Program`)
         subar.update(10, {
             stage: "Mount Application"
@@ -409,6 +415,26 @@ async function startCheckIn() {
                 const prepareCmd = await prepareDisk({
                     disk: options.optionVHD,
                     mountPoint: 'Z:\\',
+                    writeAccess: !!(cliArgs.update || cliArgs.editMode || cliArgs.encryptSetup)
+                });
+                if (!prepareCmd) {
+                    subar.stop();
+                    console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Prepare Disk\x1b[0m');
+                    await errorState('0084', 'Storage Device Malfunctioning');
+                    await exitAction(102);
+                }
+            } else {
+                subar.stop();
+                console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Locate Disk\x1b[0m');
+                await errorState('0084', 'Storage Device Malfunctioning');
+                await exitAction(101);
+            }
+        }
+        if (options.extraVHD) {
+            if (fs.existsSync(options.extraVHD)) {
+                const prepareCmd = await prepareDisk({
+                    disk: options.extraVHD,
+                    mountPoint: 'W:\\',
                     writeAccess: !!(cliArgs.update || cliArgs.editMode || cliArgs.encryptSetup)
                 });
                 if (!prepareCmd) {
@@ -474,6 +500,16 @@ async function startCheckIn() {
                     subar.increment();
                 }
             }
+            if (options.extraVHD && fs.existsSync(options.extraVHD)) {
+                const encryptCmd = await encryptDisk({diskNumber: 3, mountPoint: 'W:\\',});
+                if (!encryptCmd) {
+                    subar.stop();
+                    console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Encrypt Disk\x1b[0m');
+                    await exitAction(99);
+                } else {
+                    subar.increment();
+                }
+            }
         } else {
             if (options.applicationVHD && fs.existsSync(options.applicationVHD)) {
                 const unlockCmd = await unlockDisk({diskNumber: 0, mountPoint: 'X:\\',});
@@ -488,6 +524,17 @@ async function startCheckIn() {
             }
             if (options.optionVHD && fs.existsSync(options.optionVHD)) {
                 const unlockCmd = await unlockDisk({diskNumber: 1, mountPoint: 'Z:\\',});
+                if (!unlockCmd) {
+                    subar.stop();
+                    console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Unlock Disk\x1b[0m');
+                    await errorState('0083', 'Storage Device Not Acceptable');
+                    await exitAction(103);
+                } else {
+                    subar.increment();
+                }
+            }
+            if (options.extraVHD && fs.existsSync(options.extraVHD)) {
+                const unlockCmd = await unlockDisk({diskNumber: 3, mountPoint: 'W:\\',});
                 if (!unlockCmd) {
                     subar.stop();
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to Unlock Disk\x1b[0m');
@@ -715,6 +762,13 @@ async function runCheckOut() {
         await dismountCmd({
             disk: ((options.optionVHD && fs.existsSync(options.optionVHD)) ? options.optionVHD : undefined),
             mountPoint: 'Z:\\',
+            lockDisk: true
+        });
+    }
+    if (options.extraVHD) {
+        await dismountCmd({
+            disk: ((options.extraVHD && fs.existsSync(options.extraVHD)) ? options.extraVHD : undefined),
+            mountPoint: 'W:\\',
             lockDisk: true
         });
     }
