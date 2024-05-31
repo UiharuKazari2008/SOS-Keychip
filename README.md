@@ -287,6 +287,12 @@ In order of operation
 15. Keychip is locked and placed in a offline state
 
 ## Build EXE
+Run this first<br/>
+```powershell
+npm install pkg -g
+npm install resedit-cli -g
+```
+
 ```powershell
 pkg -t node18 --compress GZip .
 npx resedit --in .\build\RP-KeychipEmulator.exe --out .\build\savior_of_song_keychip.exe --icon 1,iona.ico --no-grow --company-name "Academy City Research P.S.R." --file-description "I-401 Keychip" --product-version 1.5.0.0 --product-name 'Savior Of Song Keychip "Iona"'
