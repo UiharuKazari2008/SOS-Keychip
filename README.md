@@ -129,60 +129,70 @@ Supports the Haruna C2C over WAN Network Driver and Overlay natively (Please obt
 * `--netPrepScript net_prepare.ps1 --netCleanScript net_cleanup.ps1 --networkDriver "C:\SEGA\system\haruna_network.exe" --networkConfig "Y:\network_config.json"`
 
 ## Command Line Options
+**It is suggested that you use json files now as there are to many options**
 ```powershell
 Savior of Song Keychip vX.XX
-by Kazari
+by Tadashi
 
 Options:
-  -c, --port             Keychip Serial Port
-                         COM5 is default port                           [string]
-      --swMode           Use Software Keychip                          [boolean]
-  -a, --auth             CMAK Authentication String
-                         Base64 Encoded "GAMEID AES_KEY AES_IV"         [string]
-  -x, --applicationVHD   Application Disk Image (X:\)                   [string]
-  -y, --appDataVHD       Configuration Disk Image (Y:\)                 [string]
-  -z, --optionVHD        Options Disk Image (Z:\)                       [string]
-  -i, --appIni           Applications INI file to be used for networking and
-                         keychip pass-trough                            [string]
-  -e, --env              Environment Configuration File                 [string]
-  -s, --secureEnv        Environment Configuration File (Secured File)  [string]
-      --forkExec         Fork the application as another child process in the
-                         event that the application is malfunctioning being
-                         launched the normal way
-      --restrictExec     Run Application with Restricted Permissions (Creates
-                         new window)
-      --applicationExec  File to execute (must be in X:\)
-                         Default order:
-                         1. X:\<applicationExec>
-                         2. X:\game.ps1
-                         3. X:\bin\game.bat
-                         4. X:\bin\start.bat                            [string]
-  -p, --prepareScript    PS1 Script to execute to prepare host          [string]
-  -k, --shutdownScript   PS1 Script to execute when application is terminated
-                         This is where tasks that require access to AppData
-                         should occur (Only AppData is Writable)        [string]
-  -q, --cleanupScript    PS1 Script to execute right before exiting keychip
+  -c, --port              Keychip Serial Port
+                          COM5 is default port                          [string]
+      --swMode            Use Software Keychip                         [boolean]
+  -a, --auth              CMAK Authentication String
+                          Base64 Encoded "GAMEID AES_KEY AES_IV"        [string]
+  -x, --applicationVHD    Application Disk Image (X:\)                  [string]
+  -y, --appDataVHD        Configuration Disk Image (Y:\)                [string]
+  -z, --optionVHD         Options Disk Image (Z:\)                      [string]
+  -w, --runtimeVHD        Runtime Modification Disk Image (W:\)         [string]
+      --applicationDelta  Enable Runtime Delta Disk (Application Disk Image)
+      --appDataDelta      Enable Runtime Delta Disk (Configuration Disk Image)
+      --optionDelta       Enable Runtime Delta Disk (Options Disk Image)
+      --runtimeDelta      Enable Runtime Delta Disk (Runtime Workspace)
+      --runtimeOption     String Passed to Runtime Modification Script  [string]
+  -i, --appIni            Applications INI file to be used for networking and
+                          keychip pass-trough                           [string]
+  -e, --env               Environment Configuration File                [string]
+  -s, --secureEnv         Environment Configuration File (Secured File) [string]
+      --forkExec          Fork the application as another child process in the
+                          event that the application is malfunctioning being
+                          launched the normal way
+      --restrictExec      Run Application with Restricted Permissions (Created
+                          new window)
+      --applicationExec   File to execute (must be in X:\)
+                          Default order:
+                          1. X:\<applicationExec>
+                          2. X:\game.ps1
+                          3. X:\bin\game.bat
+                          4. X:\bin\start.bat                           [string]
+  -p, --prepareScript     PS1 Script to execute to prepare host         [string]
+      --preStartScript    PS1 Script to execute before applicationExec  [string]
+  -k, --shutdownScript    PS1 Script to execute when application is terminated
+                          This is where tasks that require access to AppData
+                          should occur (Only AppData is Writable)       [string]
+  -q, --cleanupScript     PS1 Script to execute right before exiting keychip
                                                                         [string]
-      --networkDirect    Network Environment IP Address                 [string]
-  -h, --networkDriver    Haruna Network Driver (or other applicable)    [string]
-      --networkOverlay   Haruna Status Overlay (or other applicable)    [string]
-  -n, --networkConfig    Network Driver configFile Value                [string]
-      --netPrepScript    Network Prepare Script                         [string]
-      --netCleanScript   Network Cleanup Script                         [string]
-      --update           Mount Application with write access and run update
-                         script (must be in X:\)
-                         Default Order:
-                         1. X:\update.ps1 (Load Option Pack)
-                         2. X:\download.ps1 (Online Update)
-                         3. X:\bin\update.bat
-      --editMode         Mount as ReadWrite Mode and Detach Keychip to modify
-                         application files
-      --shutdown         Unmount and Check-Out
-      --encryptSetup     Setup Encryption of Application Volumes
-      --dontCleanup      Do not unmount all disk images mounted
-      --displayState     state.txt file used by "A.S.R."                [string]
-      --configState      current_config.txt file used by "A.S.R."       [string]
-      --logFile          Log file for powershell transactions           [string]
+      --networkDirect     Network Environment IP Address                [string]
+  -h, --networkDriver     Haruna Network Driver (or other applicable)   [string]
+      --networkOverlay    Haruna Status Overlay (or other applicable)   [string]
+  -n, --networkConfig     Network Driver configFile Value               [string]
+      --netPrepScript     Network Prepare Script                        [string]
+      --netCleanScript    Network Cleanup Script                        [string]
+      --patchDriver       Application Patch Driver                      [string]
+      --update            Mount Application with write access and run update
+                          script (must be in X:\)
+                          Default Order:
+                          1. X:\update.ps1 (Load Option Pack)
+                          2. X:\download.ps1 (Online Update)
+                          3. X:\bin\update.bat
+      --editMode          Mount as ReadWrite Mode and Detach Keychip to modify
+                          application files
+      --shutdown          Unmount and Check-Out
+      --encryptSetup      Setup Encryption of Application Volumes
+      --dontCleanup       Do not unmount all disk images mounted
+      --displayState      state.txt file used by "A.S.R."               [string]
+      --configState       current_config.txt file used by "A.S.R."      [string]
+      --configErrors      config_error.txt file used by "A.S.R."        [string]
+      --logFile           Log file for powershell transactions          [string]
 ```
 
 ## Modifying Games Data after inital Install

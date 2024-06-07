@@ -23,7 +23,7 @@
         '[37mB[37mB[37mB[37mR[37mR[37mV[37mY[94mY[94mY[94mY[37mX[37mR[37mR[37mR[37mR[37mX[37mR[37mR[37mR[37mV[37mY[37mV[37mR[37mR[37mX[94mI[90mY[37mX[36mi[34m+[34m+[90mt[90mI[34m+[34m;[34m=[34m=[34m=[34m=[34m=[34m;[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m;[34m+[36mt[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m=[36mI[36mt[36mt[90mI[90mY[90mY[90mI[90mI[94mY[94mI[94mI[94mV[94mY[94mY[94mY[96mV[94mI[96mY[96mY[0m\n' +
         '[94mY[37mX[37mX[96mX[94mV[94mY[94mY[94mV[37mX[37mR[37mR[37mR[37mR[37mX[37mX[37mR[37mR[96mR[94mY[94mY[94mY[94mV[96mR[37mX[94mI[36m+[34m=[34m=[34m+[36mi[36mt[90mI[37mY[35mi[34m=[34m;[34m;[34m;[34m=[34m=[34m=[34m=[34m=[34m=[34m=[34m;[34m:[34m:[34m:[34m:[34m=[90mI[36m+[34m:[34m:[34m:[34m:[34m:[34m:[34m:[34m:[36mi[37mY[37mX[37mV[37mV[37mV[90mY[90mY[94mI[94mI[94mI[94mY[94mI[94mt[94mt[96mY[94mI[94mI[94mI[0m\n' +
         '[96mX[37mX[94mY[36mt[94mY[94mV[37mR[37mR[37mR[37mR[37mR[37mV[37mV[37mX[37mR[37mR[96mX[94mY[36m+[36m+[94mY[96mX[96mX[94mI[34m+[34m=[34m=[36m+[36m+[36mt[90mY[37mY[90mI[34m=[34m=[34m=[34m=[34m;[34m;[34m=[34m=[34m=[34m=[34m=[34m=[34m=[34m;[34m:[34m:[90mt[37mX[90mI[36mi[34m=[34m:[34m:[34m:[34m:[34m:[34m:[34m:[36mi[90mY[90mI[94mi[94mt[94mI[94mY[94mI[94mI[94mI[94mI[94mI[94mI[94mI[94mI[96mY[94mI[94mI[94mI[0m\n' +
-        `\x1b[36mSavior of Song Keychip\x1b[0m \x1b[31mv${application_version}\x1b[0m\nby \x1b[35mKazari\x1b[0m\n\n`);
+        `\x1b[36mSavior of Song Keychip\x1b[0m \x1b[31mv${application_version}\x1b[0m\nby \x1b[35mTadashi\x1b[0m\n\n`);
 
     const fs = require('fs');
     const ini = require('ini');
@@ -202,10 +202,6 @@
             description: 'Application Patch Driver'
         })
 
-        .option('freePlay', {
-            type: 'bool',
-            description: 'Enable Freeplay'
-        })
         .option('update', {
             type: 'bool',
             description: 'Mount Application with write access and run update script (must be in X:\\)\nDefault Order:\n1. X:\\update.ps1 (Load Option Pack)\n2. X:\\download.ps1 (Online Update)\n3. X:\\bin\\update.bat'
@@ -1315,7 +1311,7 @@
                 case "SDHD":
 
                     // Chunithm New
-                    st_cfg['gpio'] = { 'dipsw1' : 0 };
+                    st_cfg['gpio'] = { 'enable': 1, 'dipsw1' : 0 };
                     st_cfg['gpio']['dipsw2'] = (highRefreshRate) ? 0 : 1
                     st_cfg['gpio']['dipsw3'] = (highRefreshRate) ? 0 : 1
                     break;
