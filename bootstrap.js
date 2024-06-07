@@ -457,6 +457,7 @@
     let login_key_md5 = "NOT_READY";
     let watchdog = null;
     let unlockPassword = null;
+    let userUnlockPassword = null;
 
     if (options.loginKey && options.loginIV) {
         login_key_md5 = (crypto.MD5(`${options.loginKey}-${options.loginIV}`)).toString();
@@ -722,6 +723,9 @@
                     console.error('\n\x1b[5m\x1b[41m\x1b[30mFailed to obtain update password!\x1b[0m');
                     await errorState('0053', 'Install Media Access Failed');
                     await exitAction(102);
+                } else {
+                    await sleep(1100);
+                    const userUnlockKey = await getUserOptionPassword({});
                 }
                 await sleep(1100);
             }
@@ -843,9 +847,9 @@
             }
             if (cliArgs.update) {
                 if (fs.existsSync(resolve(`X:/update.ps1`))) {
-                    await runCommand(`. X:/update.ps1  "${unlockPassword}"`, false, `ALLS Update`);
+                    await runCommand(`. X:/update.ps1  "${unlockPassword}" "${userUnlockPassword}"`, false, `ALLS Update`);
                 } else if (fs.existsSync(resolve(`Q:/lib/keychip/update.ps1`))) {
-                    await runCommand(`. Q:/lib/keychip/update.ps1  "${unlockPassword}"`, false, `ALLS Update (LCC)`);
+                    await runCommand(`. Q:/lib/keychip/update.ps1  "${unlockPassword}" "${userUnlockPassword}"`, false, `ALLS Update (LCC)`);
                 } else if (fs.existsSync(resolve(`X:/download.ps1`))) {
                     await runCommand(`. X:/download.ps1 "${unlockPassword}"`, false, `Remote Update`);
                 } else {
@@ -1235,6 +1239,33 @@
             console.log(`\n\n"${returned_key}"\n\n`)
         }
         unlockPassword = returned_key;
+        returned_key = null;
+        await sleep(1000);
+        return true;
+    }
+    async function getUserOptionPassword(o) {
+        if (options.verbose) {
+            console.log(`Request Update Password`);
+        } else {
+            subar.increment();
+        }
+        returned_key = null;
+        if (options.softwareMode) {
+            const challangeString = `${options.applicationID} Copyright(C)SEGA ${options.loginIV} ${keychip_id} DISK 8 `
+            returned_key = await hashPassword(challangeString);
+        } else {
+            // Request the keychip to give decryption key for applicationID with a diskNumber
+            const challangeCmd = `10:${options.applicationID}:8:`;
+            sendMessage(challangeCmd);
+            // Wait inline for response
+            while (!returned_key) {
+                await sleep(5);
+            }
+        }
+        if (options.verbose) {
+            console.log(`\n\n"${returned_key}"\n\n`)
+        }
+        userUnlockPassword = returned_key;
         returned_key = null;
         await sleep(1000);
         return true;

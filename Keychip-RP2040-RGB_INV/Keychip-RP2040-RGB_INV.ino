@@ -190,6 +190,11 @@ void parseLevel1Message(String receivedMessage) {
         String inputString = applicationID[currentIndex];
         inputString += " Copyright(C)SEGA ";
         inputString += applicationIV[currentIndex];
+        // Volume 8 is considered a user known key and is used to decrypt user compiled option files
+        if (appDrive == 8) {
+            inputString += " ";
+            inputString += keychipID[currentIndex];
+        }
         inputString += " DISK";
         inputString += appDrive;
         inputString += " 0x0001";
